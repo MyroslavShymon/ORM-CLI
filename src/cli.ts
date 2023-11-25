@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+const prompts = require('prompts');
 import { OptionValues } from "commander";
 
 export class CLI {
@@ -12,39 +13,58 @@ export class CLI {
         }
     }
 
-    private runInit() {
+    private async runInit() {
         const projectRoot = process.cwd();
-        const migrationPath = path.resolve(projectRoot, 'migration');
+        const migrationPath = path.resolve(projectRoot, 'migrations');
         const entitiesPath = path.resolve(projectRoot, 'entities');
 
-        console.log("projectRoot", projectRoot);
-
-        this.createDirectoryIfNotExists(migrationPath, 'migration');
-        this.createDirectoryIfNotExists(entitiesPath, 'entities');
-
-        const exampleEntityPath = path.resolve(entitiesPath, 'example.entity.ts');
-        const exampleEntityContent = `
-            import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-
-            @Entity()
-            export class InitEntity {
-                @PrimaryGeneratedColumn()
-                id: number;
-
-                @Column()
-                name: string;
+        const response = await prompts([
+            {
+                type: 'multiselect',
+                name: 'init',
+                message: 'Init questions',
+                choices: [
+                    { title: 'Do you want to add entities file?', value: {entity: true} },
+                    { title: 'Do you want to add migration file?', value: {migration: true} },
+                ],
             }
-        `;
+        ]);
 
-        fs.writeFileSync(exampleEntityPath, exampleEntityContent);
-        console.log(`Init entity created at ${exampleEntityPath}`);
+        if (response.init.some((item: {migration: boolean, entity: boolean}) => item.entity)) {
+            this._createDirectoryIfNotExists(entitiesPath, 'entities');
+            const value = await prompts([
+                {
+                    type: 'toggle',
+                    name: 'entity',
+                    message: 'Do you want to create example entity?',
+                    initial: true,
+                    active: 'yes',
+                    inactive: 'no'
+                }
+            ]);
 
-        // Add code to read migration and entity files and perform actions for each of them
-        console.log('Reading migration files...');
-        console.log('Reading entity files...');
+            if (value.entity) {
+                const exampleEntityPath = path.resolve(entitiesPath, 'example.entity.ts');
+                const exampleEntityContent =  `import {Column, PostgresqlDataTypes, Table} from "@myroslavshymon/orm";
+
+@Table({name: "product"})
+export class Product {
+    @Column({options: {dataType: PostgresqlDataTypes.DATE}})
+    createdAt: Date;
+}`
+
+                fs.writeFileSync(exampleEntityPath, exampleEntityContent);
+                console.log(`Init entity created at ${exampleEntityPath}`);
+            }
+
+        }
+
+        if (response.init.some((item: {migration: boolean, entity: boolean}) => item.migration)) {
+            this._createDirectoryIfNotExists(migrationPath, 'migrations');
+        }
     }
 
-    private createDirectoryIfNotExists(directoryPath: string, directoryName: string) {
+    private _createDirectoryIfNotExists(directoryPath: string, directoryName: string) {
         if (!fs.existsSync(directoryPath)) {
             fs.mkdirSync(directoryPath);
             console.log(`Created ${directoryName} folder.`);

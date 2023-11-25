@@ -1,7 +1,7 @@
 #! /usr/bin/env node
 
-import {Command} from "commander";
 import * as figlet from "figlet"
+import {Command} from "commander";
 import {CLI} from "./cli";
 
 const commander = new Command();
@@ -16,4 +16,4 @@ commander
 
 const options = commander.opts();
 
-const cli = new CLI(options);
+new CLI(options);
