@@ -119,5 +119,4 @@ const aaa = dbM.tableCreator.generateCreateTableQuery(JSON.parse(`{
 
 
 const options = commander.opts();
-
 new CLI(options);

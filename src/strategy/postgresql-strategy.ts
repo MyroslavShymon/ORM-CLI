@@ -1,10 +1,9 @@
-import { DatabaseStrategy } from './database-strategy.interface';
 import { Pool, PoolClient } from 'pg';
-import { ConnectionData } from './common/connection-data';
-import { AddMigrationInterface, GetMigrationTableInterface } from './common/interfaces';
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
+import { AddMigrationInterface, ConnectionData, GetMigrationTableInterface } from '../common';
+import { DatabaseStrategy } from './database-strategy.interface';
 
-export class PostgresStrategy implements DatabaseStrategy {
+export class PostgreSqlStrategy implements DatabaseStrategy {
 	client!: PoolClient;
 
 	async connect(dataToConnect: ConnectionData): Promise<void> {
@@ -34,6 +33,9 @@ export class PostgresStrategy implements DatabaseStrategy {
 	): Promise<DatabaseIngotInterface> {
 		const getCurrentDatabaseIngotQuery = `SELECT * FROM ${migrationTableSchema}.${migrationTable} WHERE name = 'current_database_ingot';`;
 		const response = await this.client.query(getCurrentDatabaseIngotQuery);
+		if (response.rows.length === 0) {
+			throw new Error('Initialize ORM!');
+		}
 		return response.rows[0].ingot;
 	}
 

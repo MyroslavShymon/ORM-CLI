@@ -1,10 +1,9 @@
-import { DatabaseStrategy } from './database-strategy.interface';
-import { ConnectionData } from './common/connection-data';
 import { Connection, createConnection } from 'mysql2/promise';
-import { AddMigrationInterface, GetMigrationTableInterface } from './common/interfaces';
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseStrategy } from './database-strategy.interface';
+import { AddMigrationInterface, ConnectionData, GetMigrationTableInterface } from '../common';
 
-export class MysqlStrategy implements DatabaseStrategy {
+export class MySqlStrategy implements DatabaseStrategy {
 	client!: Connection;
 
 	async connect(dataToConnect: ConnectionData): Promise<void> {
@@ -35,6 +34,7 @@ export class MysqlStrategy implements DatabaseStrategy {
 		const response = await this.client.query(getCurrentDatabaseIngotQuery);
 		//TODO зробити для mysql
 		// const currentDatabaseIngot: DatabaseIngotInterface = response.sql[0].ingot;
+		// подивитись як реалізовано в postgres і зробити поп прикладу
 		console.log(`Current database ingot`, response);
 		// return currentDatabaseIngot;
 		return {};

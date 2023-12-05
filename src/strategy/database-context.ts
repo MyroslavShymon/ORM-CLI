@@ -1,15 +1,11 @@
-import { DatabaseStrategy } from './database-strategy.interface';
-import { ConnectionData } from './common/connection-data';
-import { AddMigrationInterface, GetMigrationTableInterface } from './common/interfaces';
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseStrategy } from './database-strategy.interface';
+import { AddMigrationInterface, ConnectionData, DatabaseContextInterface, GetMigrationTableInterface } from '../common';
 
-export class DatabaseContext {
-	private databaseStrategy!: DatabaseStrategy;
+export class DatabaseContext implements DatabaseContextInterface {
+	private databaseStrategy: DatabaseStrategy;
 
-	constructor() {
-	}
-
-	setStrategy(strategy: DatabaseStrategy) {
+	constructor(strategy: DatabaseStrategy) {
 		this.databaseStrategy = strategy;
 	}
 
@@ -42,7 +38,7 @@ export class DatabaseContext {
 
 	async query(sql: string): Promise<any> {
 		try {
-			await this.databaseStrategy.query(sql);
+			return this.databaseStrategy.query(sql);
 		} catch (error) {
 			console.log(`An error occurred when querying the database`);
 			throw error;
