@@ -3,19 +3,24 @@ import fs from 'fs';
 import prompts from 'prompts';
 import {
 	ConnectionData,
+	convertToCamelCase,
 	createDirectoryIfNotExists,
 	DatabaseContextInterface,
 	MigrationManagerInterface
 } from '../common';
+import { DatabaseManager, DatabasesTypes, DataSourceContext } from '@myroslavshymon/orm';
+import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 
 
 export class MigrationManager implements MigrationManagerInterface {
 	_connectionData: ConnectionData;
 	_databaseContext: DatabaseContextInterface;
+	_databaseType: DatabasesTypes;
 
-	constructor(databaseContext: DatabaseContextInterface, connectionData: ConnectionData) {
+	constructor(databaseContext: DatabaseContextInterface, connectionData: ConnectionData, databaseType: DatabasesTypes) {
 		this._connectionData = connectionData;
 		this._databaseContext = databaseContext;
+		this._databaseType = databaseType;
 	}
 
 	async createMigration(migrationName: string | boolean): Promise<void> {
@@ -23,8 +28,11 @@ export class MigrationManager implements MigrationManagerInterface {
 		const migrationPath = path.resolve(projectRoot, 'migrations');
 
 		await this._handleMigrationFolderCreation(migrationPath);
-		migrationName = await this._generateMigrationName(migrationPath, migrationName);
-		await this._handleMigrationCreation(migrationPath, migrationName);
+
+		const isMigrationsExist = fs.readdirSync(migrationPath).length !== 0;
+
+		migrationName = await this._generateMigrationName(migrationName, isMigrationsExist);
+		await this._handleMigrationCreation(migrationPath, migrationName, isMigrationsExist);
 	}
 
 	private async _handleMigrationFolderCreation(migrationPath: string) {
@@ -63,10 +71,9 @@ export class MigrationManager implements MigrationManagerInterface {
 	}
 
 	private async _generateMigrationName(
-		migrationPath: string,
-		migrationName: string | boolean
+		migrationName: string | boolean,
+		isMigrationsExist: boolean
 	): Promise<string> {
-		const isMigrationsExist = fs.readdirSync(migrationPath).length !== 0;
 		//migrationName === true --- means that there is no name in the migration
 		if (!isMigrationsExist && migrationName === true) {
 			const userInput = await prompts([
@@ -94,14 +101,19 @@ export class MigrationManager implements MigrationManagerInterface {
 		return Date.now() + '_' + userInput.migrationName;
 	}
 
-	private async _handleMigrationCreation(migrationPath: string, migrationName: string) {
-		await this._createMigrationInDatabase(migrationName);
-		this._createMigrationFile(migrationPath, migrationName);
+	private async _handleMigrationCreation(
+		migrationPath: string,
+		migrationName: string,
+		isMigrationsExist: boolean
+	) {
+		const databaseIngot = await this._createMigrationInDatabase(migrationName);
+		const migrationQuery = this._createMigrationQuery(databaseIngot, isMigrationsExist);
+		this._createMigrationFile(migrationPath, migrationName, migrationQuery);
 		console.log(`Migration created at ${migrationPath}`);
 		return;
 	}
 
-	private async _createMigrationInDatabase(migrationName: string) {
+	private async _createMigrationInDatabase(migrationName: string): Promise<DatabaseIngotInterface> {
 		const databaseIngot = await this._databaseContext.getCurrentDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
@@ -113,12 +125,45 @@ export class MigrationManager implements MigrationManagerInterface {
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
+
+		return databaseIngot;
 	}
 
-	private _createMigrationFile(migrationPath: string, migrationName: string) {
-		const exampleMigrationPath = path.resolve(migrationPath, `${migrationName}.migration.ts`);
-		const exampleMigrationContent = `console.log('try 2')`;
+	private _createMigrationFile(migrationPath: string, migrationName: string, migrationQuery: string) {
+		migrationPath = path.resolve(migrationPath, `${migrationName}.migration.ts`);
+		migrationName = convertToCamelCase(migrationName.split('_').slice(1).join(''));
 
-		fs.writeFileSync(exampleMigrationPath, exampleMigrationContent);
+		const migrationContent = `import {DatabaseManagerInterface, MigrationInterface} from "@myroslavshymon/orm/orm/core";
+
+export class ${migrationName} implements MigrationInterface {
+    async down(databaseManager: DatabaseManagerInterface): Promise<void> {
+        await databaseManager.query(
+            \`${migrationQuery}\`
+        );
+    }
+
+   async up(databaseManager: DatabaseManagerInterface): Promise<void> {
+       await databaseManager.query(
+           \`${migrationQuery}\`
+       );
+    }
+}`;
+		fs.writeFileSync(migrationPath, migrationContent);
+	}
+
+	private _createMigrationQuery(databaseIngot: DatabaseIngotInterface, isMigrationsExist: boolean): string {
+		let createTableQuery;
+		const databaseManager = new DatabaseManager({ type: this._databaseType }, new DataSourceContext());
+
+		if (!databaseIngot.tables) {
+			throw new Error('There is no tables to create');
+		}
+
+		if (!isMigrationsExist) {
+			createTableQuery = databaseManager.tableCreator.generateCreateTableQuery(databaseIngot.tables);
+			return createTableQuery;
+		}
+
+		return 'console.log(\'in future\')';
 	}
 }

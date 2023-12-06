@@ -10,13 +10,16 @@ export class CLI {
 	private readonly _migrationManager: MigrationManagerInterface;
 	private readonly _initManager: InitManagerInterface;
 	private readonly _databaseContext: DatabaseContextInterface;
+	private _databaseType: DatabasesTypes = process.env.DB_TYPE === DatabasesTypes.MYSQL
+		? DatabasesTypes.MYSQL
+		: DatabasesTypes.POSTGRES;
 
 	constructor(commanderOptions: OptionValues) {
 		dotenv.config();
 		const strategy = this._getStrategy();
 		this._databaseContext = new DatabaseContext(strategy);
 		this._connectionData = this._initializeConnectionData();
-		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData);
+		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData, this._databaseType);
 		this._initManager = new InitManager();
 
 		if (commanderOptions.init) {
