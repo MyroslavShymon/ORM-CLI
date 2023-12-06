@@ -1,15 +1,17 @@
 import * as dotenv from 'dotenv';
 import { OptionValues } from 'commander';
-import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseManager, DatabasesTypes, DataSourceContext } from '@myroslavshymon/orm';
 import { ConnectionData, DatabaseContextInterface, InitManagerInterface, MigrationManagerInterface } from './common';
 import { InitManager, MigrationManager } from './managers';
 import { DatabaseContext, DatabaseStrategy, MySqlStrategy, PostgreSqlStrategy } from './strategy';
+import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 
 export class CLI {
 	private readonly _connectionData: ConnectionData;
 	private readonly _migrationManager: MigrationManagerInterface;
 	private readonly _initManager: InitManagerInterface;
 	private readonly _databaseContext: DatabaseContextInterface;
+	private readonly _databaseManager: DatabaseManagerInterface;
 	private _databaseType: DatabasesTypes = process.env.DB_TYPE === DatabasesTypes.MYSQL
 		? DatabasesTypes.MYSQL
 		: DatabasesTypes.POSTGRES;
@@ -19,7 +21,11 @@ export class CLI {
 		const strategy = this._getStrategy();
 		this._databaseContext = new DatabaseContext(strategy);
 		this._connectionData = this._initializeConnectionData();
-		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData, this._databaseType);
+		this._databaseManager = new DatabaseManager({
+			...this._connectionData,
+			type: this._databaseType
+		}, new DataSourceContext());
+		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData, this._databaseManager);
 		this._initManager = new InitManager();
 
 		if (commanderOptions.init) {
@@ -27,6 +33,10 @@ export class CLI {
 		}
 		if (commanderOptions['migration:create']) {
 			this._migrationManager.createMigration(commanderOptions['migration:create']);
+		}
+
+		if (commanderOptions['migration:up']) {
+			this._migrationManager.migrationUp(commanderOptions['migration:up']);
 		}
 	}
 

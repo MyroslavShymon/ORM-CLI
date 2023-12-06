@@ -1,6 +1,8 @@
 import path from 'path';
 import fs from 'fs';
 import prompts from 'prompts';
+import { DatabaseIngotInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import * as tsNode from 'ts-node';
 import {
 	ConnectionData,
 	convertToCamelCase,
@@ -8,24 +10,84 @@ import {
 	DatabaseContextInterface,
 	MigrationManagerInterface
 } from '../common';
-import { DatabaseManager, DatabasesTypes, DataSourceContext } from '@myroslavshymon/orm';
-import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
-
 
 export class MigrationManager implements MigrationManagerInterface {
+	_projectRoot = process.cwd();
 	_connectionData: ConnectionData;
 	_databaseContext: DatabaseContextInterface;
-	_databaseType: DatabasesTypes;
+	_databaseManager: DatabaseManagerInterface;
 
-	constructor(databaseContext: DatabaseContextInterface, connectionData: ConnectionData, databaseType: DatabasesTypes) {
+	constructor(
+		databaseContext: DatabaseContextInterface,
+		connectionData: ConnectionData,
+		databaseManager: DatabaseManagerInterface
+	) {
 		this._connectionData = connectionData;
 		this._databaseContext = databaseContext;
-		this._databaseType = databaseType;
+		this._databaseManager = databaseManager;
 	}
 
+	async migrationUp(migrationName: string): Promise<void> {
+		await this._prepareMigration();
+		const filePath = path.resolve(this._projectRoot, `migrations`, migrationName);
+		const migrationClassName = this._extractMigrationClassName(migrationName);
+
+		await this._runMigration(filePath, migrationClassName);
+		await this._updateMigrationStatus(migrationName, true);
+
+	}
+
+	async migrate(migrationName: string) {
+		await this._prepareMigration();
+		const migrationPath = path.resolve(this._projectRoot, `migrations`);
+		const migrationFiles = fs.readdirSync(migrationPath).filter(file => file.endsWith('.migration.ts'));
+
+		for (const file of migrationFiles) {
+			const filePath = path.join(migrationPath, file);
+			const migrationClassName = this._extractMigrationClassName(migrationName);
+
+			await this._runMigration(filePath, migrationClassName);
+			await this._updateMigrationStatus(migrationName, true);
+		}
+	}
+
+	private async _prepareMigration(): Promise<void> {
+		await this._databaseManager.connectDatabase();
+		await this._databaseContext.connect(this._connectionData);
+	}
+
+	private _extractMigrationClassName(migrationName: string): string {
+		return convertToCamelCase(
+			migrationName
+				.split('_')
+				.slice(1)
+				.join('')
+				.split('.migration.ts')[0]
+		);
+	}
+
+	private async _runMigration(filePath: string, migrationClassName: string) {
+		tsNode.register();
+		const module = require(filePath);
+		const MigrationClass = module[migrationClassName];
+
+		const migrationClass = new MigrationClass();
+		await migrationClass.up(this._databaseManager);
+	}
+
+	private async _updateMigrationStatus(migrationName: string, isUp: boolean): Promise<void> {
+		await this._databaseContext.updateMigrationStatus({
+			migrationTable: this._connectionData.migrationTable,
+			migrationTableSchema: this._connectionData.migrationTableSchema,
+			migrationName: migrationName.split('.migration.ts')[0],
+			isUp
+		});
+	}
+
+	/////////Create migration/////////
+
 	async createMigration(migrationName: string | boolean): Promise<void> {
-		const projectRoot = process.cwd();
-		const migrationPath = path.resolve(projectRoot, 'migrations');
+		const migrationPath = path.resolve(this._projectRoot, 'migrations');
 
 		await this._handleMigrationFolderCreation(migrationPath);
 
@@ -98,6 +160,9 @@ export class MigrationManager implements MigrationManagerInterface {
 			name: 'migrationName',
 			message: 'Enter migration name'
 		});
+		if (userInput.migrationName === undefined || userInput.migrationName === '') {
+			throw new Error('You specified an incorrect migration name');
+		}
 		return Date.now() + '_' + userInput.migrationName;
 	}
 
@@ -136,15 +201,15 @@ export class MigrationManager implements MigrationManagerInterface {
 		const migrationContent = `import {DatabaseManagerInterface, MigrationInterface} from "@myroslavshymon/orm/orm/core";
 
 export class ${migrationName} implements MigrationInterface {
-    async down(databaseManager: DatabaseManagerInterface): Promise<void> {
+    async up(databaseManager: DatabaseManagerInterface): Promise<void> {
         await databaseManager.query(
             \`${migrationQuery}\`
         );
     }
 
-   async up(databaseManager: DatabaseManagerInterface): Promise<void> {
+   async down(databaseManager: DatabaseManagerInterface): Promise<void> {
        await databaseManager.query(
-           \`${migrationQuery}\`
+           'SELECT * from public.migrations'
        );
     }
 }`;
@@ -153,14 +218,13 @@ export class ${migrationName} implements MigrationInterface {
 
 	private _createMigrationQuery(databaseIngot: DatabaseIngotInterface, isMigrationsExist: boolean): string {
 		let createTableQuery;
-		const databaseManager = new DatabaseManager({ type: this._databaseType }, new DataSourceContext());
 
 		if (!databaseIngot.tables) {
 			throw new Error('There is no tables to create');
 		}
 
 		if (!isMigrationsExist) {
-			createTableQuery = databaseManager.tableCreator.generateCreateTableQuery(databaseIngot.tables);
+			createTableQuery = this._databaseManager.tableCreator.generateCreateTableQuery(databaseIngot.tables);
 			return createTableQuery;
 		}
 

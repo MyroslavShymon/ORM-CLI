@@ -1,6 +1,12 @@
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabaseStrategy } from './database-strategy.interface';
-import { AddMigrationInterface, ConnectionData, DatabaseContextInterface, GetMigrationTableInterface } from '../common';
+import {
+	AddMigrationInterface,
+	ConnectionData,
+	DatabaseContextInterface,
+	GetMigrationTableInterface,
+	UpdateMigrationStatusInterface
+} from '../common';
 
 export class DatabaseContext implements DatabaseContextInterface {
 	private databaseStrategy: DatabaseStrategy;
@@ -32,6 +38,15 @@ export class DatabaseContext implements DatabaseContextInterface {
 			return this.databaseStrategy.getCurrentDatabaseIngot(options);
 		} catch (error) {
 			console.log(`Error while getting current database ingot`);
+			throw error;
+		}
+	}
+
+	async updateMigrationStatus(options: UpdateMigrationStatusInterface): Promise<void> {
+		try {
+			return this.databaseStrategy.updateMigrationStatus(options);
+		} catch (error) {
+			console.log(`Error when changing migration status`);
 			throw error;
 		}
 	}

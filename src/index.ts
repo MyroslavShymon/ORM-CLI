@@ -13,6 +13,7 @@ commander
 	.description('ClI to work with ORM system')
 	.option('-i, --init', 'Init ORM')
 	.option('-mc, --migration:create [char]', 'Create migration')
+	.option('-mup, --migration:up <char>', 'Migration up')
 	.parse(process.argv);
 
 const options = commander.opts();
