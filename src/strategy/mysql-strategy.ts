@@ -1,6 +1,6 @@
 import { Connection, createConnection } from 'mysql2/promise';
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
-import { DatabaseStrategy } from './database-strategy.interface';
+import { DatabaseStrategy } from './interfaces';
 import {
 	AddMigrationInterface,
 	ConnectionData,
@@ -42,6 +42,22 @@ export class MySqlStrategy implements DatabaseStrategy {
 		// подивитись як реалізовано в postgres і зробити поп прикладу
 		console.log(`Current database ingot`, response);
 		// return currentDatabaseIngot;
+		return {};
+	}
+
+	async getLastDatabaseIngot(
+		{
+			migrationTableSchema,
+			migrationTable
+		}: GetMigrationTableInterface
+	): Promise<DatabaseIngotInterface> {
+		const getLastDatabaseIngotQuery = `SELECT * FROM ${migrationTableSchema}.${migrationTable} ORDER BY id DESC LIMIT 1;`;
+		//TODO
+		// const response = await this.client.query(getLastDatabaseIngotQuery);
+		// if (response.rows.length === 0) {
+		// 	throw new Error('Initialize ORM!');
+		// }
+		// return response.rows[0].ingot;
 		return {};
 	}
 

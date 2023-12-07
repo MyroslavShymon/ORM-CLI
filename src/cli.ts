@@ -1,9 +1,15 @@
 import * as dotenv from 'dotenv';
 import { OptionValues } from 'commander';
 import { DatabaseManager, DatabasesTypes, DataSourceContext } from '@myroslavshymon/orm';
-import { ConnectionData, DatabaseContextInterface, InitManagerInterface, MigrationManagerInterface } from './common';
+import { ConnectionData, InitManagerInterface, MigrationManagerInterface } from './common';
 import { InitManager, MigrationManager } from './managers';
-import { DatabaseContext, DatabaseStrategy, MySqlStrategy, PostgreSqlStrategy } from './strategy';
+import {
+	DatabaseContext,
+	DatabaseContextInterface,
+	DatabaseStrategy,
+	MySqlStrategy,
+	PostgreSqlStrategy
+} from './strategy';
 import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 
 export class CLI {

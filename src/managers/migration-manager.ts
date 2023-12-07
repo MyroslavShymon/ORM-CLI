@@ -3,13 +3,8 @@ import fs from 'fs';
 import prompts from 'prompts';
 import { DatabaseIngotInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import * as tsNode from 'ts-node';
-import {
-	ConnectionData,
-	convertToCamelCase,
-	createDirectoryIfNotExists,
-	DatabaseContextInterface,
-	MigrationManagerInterface
-} from '../common';
+import { ConnectionData, convertToCamelCase, createDirectoryIfNotExists, MigrationManagerInterface } from '../common';
+import { DatabaseContextInterface } from '../strategy';
 
 export class MigrationManager implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
@@ -171,8 +166,13 @@ export class MigrationManager implements MigrationManagerInterface {
 		migrationName: string,
 		isMigrationsExist: boolean
 	) {
-		const databaseIngot = await this._createMigrationInDatabase(migrationName);
-		const migrationQuery = this._createMigrationQuery(databaseIngot, isMigrationsExist);
+		const lastDatabaseIngot = await this._databaseContext.getLastDatabaseIngot({
+			migrationTable: this._connectionData.migrationTable,
+			migrationTableSchema: this._connectionData.migrationTableSchema
+		});
+
+		const currentDatabaseIngot = await this._createMigrationInDatabase(migrationName);
+		const migrationQuery = await this._createMigrationQuery(currentDatabaseIngot, lastDatabaseIngot, isMigrationsExist);
 		this._createMigrationFile(migrationPath, migrationName, migrationQuery);
 		console.log(`Migration created at ${migrationPath}`);
 		return;
@@ -192,6 +192,25 @@ export class MigrationManager implements MigrationManagerInterface {
 		});
 
 		return databaseIngot;
+	}
+
+	private async _createMigrationQuery(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface,
+		isMigrationsExist: boolean
+	): Promise<string> {
+		let createTableQuery;
+		if (!currentDatabaseIngot.tables) {
+			throw new Error('There is no tables to create');
+		}
+
+		if (!isMigrationsExist) {
+			createTableQuery = this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
+			return createTableQuery;
+		}
+		createTableQuery = `${JSON.stringify(lastDatabaseIngot)}`;
+
+		return createTableQuery;
 	}
 
 	private _createMigrationFile(migrationPath: string, migrationName: string, migrationQuery: string) {
@@ -214,20 +233,5 @@ export class ${migrationName} implements MigrationInterface {
     }
 }`;
 		fs.writeFileSync(migrationPath, migrationContent);
-	}
-
-	private _createMigrationQuery(databaseIngot: DatabaseIngotInterface, isMigrationsExist: boolean): string {
-		let createTableQuery;
-
-		if (!databaseIngot.tables) {
-			throw new Error('There is no tables to create');
-		}
-
-		if (!isMigrationsExist) {
-			createTableQuery = this._databaseManager.tableCreator.generateCreateTableQuery(databaseIngot.tables);
-			return createTableQuery;
-		}
-
-		return 'console.log(\'in future\')';
 	}
 }

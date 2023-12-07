@@ -4,7 +4,7 @@ import {
 	ConnectionData,
 	GetMigrationTableInterface,
 	UpdateMigrationStatusInterface
-} from '../common';
+} from '../../common';
 
 export interface DatabaseStrategy {
 	client: any;
@@ -14,6 +14,8 @@ export interface DatabaseStrategy {
 	createMigration(options: AddMigrationInterface): Promise<void>;
 
 	getCurrentDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface>;
+
+	getLastDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface>;
 
 	updateMigrationStatus(options: UpdateMigrationStatusInterface): Promise<void>;
 

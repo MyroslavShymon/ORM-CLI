@@ -6,7 +6,7 @@ import {
 	GetMigrationTableInterface,
 	UpdateMigrationStatusInterface
 } from '../common';
-import { DatabaseStrategy } from './database-strategy.interface';
+import { DatabaseStrategy } from './interfaces';
 
 export class PostgreSqlStrategy implements DatabaseStrategy {
 	client!: PoolClient;
@@ -41,6 +41,22 @@ export class PostgreSqlStrategy implements DatabaseStrategy {
 		if (response.rows.length === 0) {
 			throw new Error('Initialize ORM!');
 		}
+		return response.rows[0].ingot;
+	}
+
+	async getLastDatabaseIngot(
+		{
+			migrationTableSchema,
+			migrationTable
+		}: GetMigrationTableInterface
+	): Promise<DatabaseIngotInterface> {
+		const getLastDatabaseIngotQuery = `SELECT * FROM ${migrationTableSchema}.${migrationTable} ORDER BY id DESC LIMIT 1;`;
+		const response = await this.client.query(getLastDatabaseIngotQuery);
+
+		if (response.rows.length === 0) {
+			throw new Error('Initialize ORM!');
+		}
+
 		return response.rows[0].ingot;
 	}
 
