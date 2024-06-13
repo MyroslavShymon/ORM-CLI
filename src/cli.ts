@@ -17,20 +17,30 @@ export class CLI {
 	private readonly _migrationManager: MigrationManagerInterface;
 	private readonly _initManager: InitManagerInterface;
 	private readonly _databaseContext: DatabaseContextInterface;
-	private readonly _databaseManager: DatabaseManagerInterface;
-	private _databaseType: DatabasesTypes = process.env.DB_TYPE === DatabasesTypes.MYSQL
-		? DatabasesTypes.MYSQL
-		: DatabasesTypes.POSTGRES;
+	private readonly _databaseType: DatabasesTypes;
+	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
 
 	constructor(commanderOptions: OptionValues) {
 		dotenv.config();
+		this._databaseType = process.env.DB_TYPE === DatabasesTypes.MYSQL
+			? DatabasesTypes.MYSQL
+			: DatabasesTypes.POSTGRES;
 		const strategy = this._getStrategy();
 		this._databaseContext = new DatabaseContext(strategy);
 		this._connectionData = this._initializeConnectionData();
-		this._databaseManager = new DatabaseManager({
-			...this._connectionData,
-			type: this._databaseType
-		}, new DataSourceContext());
+
+		if (this._databaseType === DatabasesTypes.MYSQL) {
+			this._databaseManager = new DatabaseManager<DatabasesTypes.MYSQL>({
+				...this._connectionData,
+				type: this._databaseType
+			}, new DataSourceContext()) as DatabaseManagerInterface<DatabasesTypes.MYSQL>;
+		} else {
+			this._databaseManager = new DatabaseManager<DatabasesTypes.POSTGRES>({
+				...this._connectionData,
+				type: this._databaseType
+			}, new DataSourceContext()) as DatabaseManagerInterface<DatabasesTypes.POSTGRES>;
+		}
+
 		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData, this._databaseManager);
 		this._initManager = new InitManager();
 

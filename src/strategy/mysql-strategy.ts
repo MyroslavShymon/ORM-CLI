@@ -3,8 +3,10 @@ import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabaseStrategy } from './interfaces';
 import {
 	AddMigrationInterface,
+	CheckTableExistenceInterface,
 	ConnectionData,
 	GetMigrationTableInterface,
+	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
 } from '../common';
 
@@ -42,7 +44,7 @@ export class MySqlStrategy implements DatabaseStrategy {
 		// подивитись як реалізовано в postgres і зробити поп прикладу
 		console.log(`Current database ingot`, response);
 		// return currentDatabaseIngot;
-		return {};
+		return { tables: [] };
 	}
 
 	async getLastDatabaseIngot(
@@ -58,7 +60,7 @@ export class MySqlStrategy implements DatabaseStrategy {
 		// 	throw new Error('Initialize ORM!');
 		// }
 		// return response.rows[0].ingot;
-		return {};
+		return { tables: [] };
 	}
 
 	async updateMigrationStatus({
@@ -75,6 +77,25 @@ export class MySqlStrategy implements DatabaseStrategy {
 		`;
 		await this.client.query(updateMigrationStatusQuery);
 		console.log(`Migration status of ${migrationName} is updated to ${isUp}`);
+	}
+
+	async updateMigrationIngot({
+								   ingot,
+								   migrationTable,
+								   migrationTableSchema,
+								   migrationName
+							   }: UpdateMigrationIngotInterface): Promise<void> {
+		const updateMigrationIngotQuery = `
+					UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
+					SET ingot = '${JSON.stringify(ingot)}'
+					WHERE name = '${migrationName ? migrationName : 'current_database_ingot'}';
+		`;
+		await this.client.query(updateMigrationIngotQuery);
+		console.log(`Ingot of migration ${migrationName ? migrationName : 'current_database_ingot'} is updated`);
+	}
+
+	async checkTableExistence(options: CheckTableExistenceInterface): Promise<void> {
+		console.log('checkTableExistence', options);
 	}
 
 	async query(sql: string): Promise<any> {

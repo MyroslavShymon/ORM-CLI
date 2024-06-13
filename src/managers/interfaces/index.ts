@@ -1,0 +1,1 @@
+export * from './trimmed-table-info.interface';

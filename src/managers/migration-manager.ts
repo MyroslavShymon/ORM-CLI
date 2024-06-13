@@ -3,19 +3,22 @@ import fs from 'fs';
 import prompts from 'prompts';
 import { DatabaseIngotInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import * as tsNode from 'ts-node';
+import { v4 as uuidv4 } from 'uuid';
 import { ConnectionData, convertToCamelCase, createDirectoryIfNotExists, MigrationManagerInterface } from '../common';
 import { DatabaseContextInterface } from '../strategy';
+import { TrimmedTableInfoInterface } from './interfaces';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
 export class MigrationManager implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
 	_connectionData: ConnectionData;
 	_databaseContext: DatabaseContextInterface;
-	_databaseManager: DatabaseManagerInterface;
+	_databaseManager: DatabaseManagerInterface<DatabasesTypes>;
 
 	constructor(
 		databaseContext: DatabaseContextInterface,
 		connectionData: ConnectionData,
-		databaseManager: DatabaseManagerInterface
+		databaseManager: DatabaseManagerInterface<DatabasesTypes>
 	) {
 		this._connectionData = connectionData;
 		this._databaseContext = databaseContext;
@@ -166,134 +169,265 @@ export class MigrationManager implements MigrationManagerInterface {
 		migrationName: string,
 		isMigrationsExist: boolean
 	) {
-		const lastDatabaseIngot = await this._databaseContext.getLastDatabaseIngot({
+		await this._databaseContext.checkTableExistence({
+			tableName: this._connectionData.migrationTable,
+			schema: this._connectionData.migrationTableSchema
+		});
+		let currentDatabaseIngot: DatabaseIngotInterface = await this._databaseContext.getCurrentDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
 
-		const currentDatabaseIngot = await this._createMigrationInDatabase(migrationName);
-		const migrationQuery = await this._createMigrationQuery(currentDatabaseIngot, lastDatabaseIngot, isMigrationsExist);
-		this._createMigrationFile(migrationPath, migrationName, migrationQuery);
-		console.log(`Migration created at ${migrationPath}`);
-		return;
-	}
+		if (currentDatabaseIngot.tables.length === 0) {
+			throw new Error(
+				'There is no tables for create migration.\n' +
+				'Please create entities and pass it into models array when init ORM'
+			);
+		}
 
-	private async _createMigrationInDatabase(migrationName: string): Promise<DatabaseIngotInterface> {
-		const databaseIngot = await this._databaseContext.getCurrentDatabaseIngot({
+		currentDatabaseIngot = await this._addIdToCurrentDatabaseIngot(currentDatabaseIngot);
+
+		const lastDatabaseIngot: DatabaseIngotInterface = await this._databaseContext.getLastDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
 
 		await this._databaseContext.createMigration({
 			migrationName,
-			databaseIngot,
+			databaseIngot: currentDatabaseIngot,
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
-
-		return databaseIngot;
+		const migrationQuery = await this._createMigrationQuery(currentDatabaseIngot, lastDatabaseIngot, isMigrationsExist);
+		this._createMigrationFile(migrationPath, migrationName, migrationQuery);
+		console.log(`Migration created at ${migrationPath}`);
+		return;
 	}
 
+	async _addIdToCurrentDatabaseIngot(currentDatabaseIngot: DatabaseIngotInterface): Promise<DatabaseIngotInterface> {
+		console.log('111111111111111111111', currentDatabaseIngot);
+		for (const currentTable of currentDatabaseIngot.tables) {
+			if (currentTable.id === undefined) {
+				currentTable.id = uuidv4();
+			}
+			if (currentTable.columns)
+				for (const column of currentTable.columns) {
+					if (column.id === undefined)
+
+						column.id = uuidv4();
+				}
+			if (currentTable.computedColumns)
+				for (const computedColumns of currentTable.computedColumns) {
+					if (computedColumns.id === undefined)
+						computedColumns.id = uuidv4();
+				}
+		}
+		console.log('2222222222222222', currentDatabaseIngot);
+
+		await this._databaseContext.updateMigrationIngot({
+			migrationTable: this._connectionData.migrationTable,
+			migrationTableSchema: this._connectionData.migrationTableSchema,
+			ingot: currentDatabaseIngot
+		});
+
+		return currentDatabaseIngot;
+	}
+
+	//TODO не заюуваємо шо в нас ще будуть трігери процедури і так далі
 	private async _createMigrationQuery(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface,
 		isMigrationsExist: boolean
 	): Promise<string> {
-		if (!currentDatabaseIngot.tables) {
-			throw new Error('There is no tables to create');
-		}
-
 		if (!isMigrationsExist) {
-			return this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
+			const a = this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
+			console.log('aaaaaaaaaaaaaaaaaaaaaaaaaaa', a);
+			return a;
 		}
 
-		let createTableQuery = '';
-		const newColumns = this.findNewColumns(currentDatabaseIngot, lastDatabaseIngot);
-		const deletedColumns = this.findDeletedColumns(currentDatabaseIngot, lastDatabaseIngot);
+		let migrationQuery = '';
 
-		for (const { tableName, columnName } of deletedColumns) {
-			const deleteColumnQuery = await this._databaseManager.tableManipulation.alterTable(tableName, true).deleteColumn({
-				columnName,
-				isCascade: true
-			});
-			createTableQuery += deleteColumnQuery + '\n\n';
+		if (currentDatabaseIngot.tables && lastDatabaseIngot.tables) {
+			migrationQuery += await this._generateDropTableQuery(currentDatabaseIngot, lastDatabaseIngot);
 		}
+		console.log('shooooooooooooooooooooooooooooooo', migrationQuery);
+		return migrationQuery;
+		// let createTableQuery = '';
+		// const newColumns = this.findNewColumns(currentDatabaseIngot, lastDatabaseIngot);
+		// const deletedColumns = this.findDeletedColumns(currentDatabaseIngot, lastDatabaseIngot);
+		// console.log('sdfsdfs', this.addDefaultValue(currentDatabaseIngot, lastDatabaseIngot));
 
-		for (const { tableName, column } of newColumns) {
-			const newColumnQuery = await this._databaseManager.tableManipulation.alterTable(tableName, true).addColumn({
-				columnName: column.name,
-				options: column.options
-			});
-			createTableQuery += newColumnQuery + '\n\n';
-		}
 
-		return createTableQuery;
+		// for (const { tableName, columnName } of deletedColumns) {
+		// 	const deleteColumnQuery = await this._databaseManager.tableManipulation.alterTable(tableName, true).deleteColumn({
+		// 		columnName,
+		// 		isCascade: true
+		// 	});
+		// 	createTableQuery += deleteColumnQuery + '\n\n';
+		// }
+		//
+		// for (const { tableName, column } of newColumns) {
+		// 	const newColumnQuery = await this._databaseManager.tableManipulation.alterTable(tableName, true).addColumn({
+		// 		columnName: column.name,
+		// 		options: column.options
+		// 	});
+		// 	createTableQuery += newColumnQuery + '\n\n';
+		// }
+
+		// return createTableQuery;
 	}
 
-	findDeletedColumns(
+	private async _generateDropTableQuery(currentDatabaseIngot: DatabaseIngotInterface, lastDatabaseIngot: DatabaseIngotInterface) {
+		let migrationQuery = '';
+
+		const deletedTablesNames = this._detectDeletedTables(currentDatabaseIngot, lastDatabaseIngot);
+		console.log('deletedTables', deletedTablesNames);
+
+		if (deletedTablesNames.length > 0) {
+			for (const tableName of deletedTablesNames) {
+				migrationQuery += await this._databaseManager.tableManipulation
+					.alterTable(tableName, true)
+					.dropTable({
+						type: 'RESTRICT'
+					}) + '\n';
+			}
+		}
+
+		console.log('migrationQuerymigrationQuerymigrationQuerymigrationQuery', typeof migrationQuery, migrationQuery);
+
+		return migrationQuery;
+	}
+
+	private _detectDeletedTables(
 		currentDatabase: DatabaseIngotInterface,
 		lastDatabase: DatabaseIngotInterface
-	): { tableName: string; columnName: string }[] {
-		const deletedColumns: { tableName: string; columnName: string }[] = [];
+	): string[] {
+		const deletedTables: string[] = [];
+		const currentTables: TrimmedTableInfoInterface[] = currentDatabase.tables!.map(table => ({
+			id: table.id,
+			name: table.name
+		}));
+		const lastTables: TrimmedTableInfoInterface[] = lastDatabase.tables!.map(table => ({
+			id: table.id,
+			name: table.name
+		}));
 
-		currentDatabase.tables && currentDatabase.tables.forEach((currentTable) => {
-			const tableName = currentTable.name;
-			const lastTable = lastDatabase.tables && lastDatabase.tables.find((t) => t.name === tableName);
+		console.log('currentTables', currentTables);
+		console.log('lastTables', lastTables);
 
-			if (lastTable) {
-				const currentColumns = currentTable.columns.reduce((acc, col) => {
-					acc[col.name] = col;
-					return acc;
-				}, {} as Record<string, any>);
-				const lastColumns = lastTable.columns.reduce((acc, col) => {
-					acc[col.name] = col;
-					return acc;
-				}, {} as Record<string, any>);
-
-				Object.keys(lastColumns).forEach((columnName) => {
-					if (!(columnName in currentColumns)) {
-						deletedColumns.push({
-							tableName: tableName,
-							columnName: columnName
-						});
-					}
-				});
+		lastTables.forEach((lastTable) => {
+			const table = currentTables.find((currentTable) => currentTable.id === lastTable.id);
+			console.log('tabletabletabletabletabletable', table);
+			if (!table) {
+				deletedTables.push(lastTable.name);
 			}
 		});
 
-		return deletedColumns;
+		return deletedTables;
 	}
 
-	findNewColumns(currentDatabase: any, lastDatabase: any) {
-		const newColumns: any[] = [];
-
-		currentDatabase.tables.forEach((currentTable: any) => {
-			const tableName: any = currentTable.name;
-			const lastTable: any = lastDatabase.tables.find((t: any) => t.name === tableName);
-
-			if (lastTable) {
-				const currentColumns: any = currentTable.columns.reduce((acc: any, col: any) => {
-					acc[col.name] = col;
-					return acc;
-				}, {});
-				const lastColumns: any = lastTable.columns.reduce((acc: any, col: any) => {
-					acc[col.name] = col;
-					return acc;
-				}, {});
-
-				Object.keys(currentColumns).forEach((columnName) => {
-					if (!(columnName in lastColumns)) {
-						newColumns.push({
-							tableName: tableName,
-							column: currentColumns[columnName]
-						});
-					}
-				});
-			}
-		});
-
-		return newColumns;
-	}
+	// findDeletedColumns(
+	// 	currentDatabase: DatabaseIngotInterface,
+	// 	lastDatabase: DatabaseIngotInterface
+	// ): { tableName: string; columnName: string }[] {
+	// 	const deletedColumns: { tableName: string; columnName: string }[] = [];
+	//
+	// 	currentDatabase.tables && currentDatabase.tables.forEach((currentTable) => {
+	// 		const tableName = currentTable.name;
+	// 		const lastTable = lastDatabase.tables && lastDatabase.tables.find((t) => t.name === tableName);
+	//
+	// 		if (lastTable) {
+	// 			const currentColumns = currentTable.columns.reduce((acc, col) => {
+	// 				acc[col.name] = col;
+	// 				return acc;
+	// 			}, {} as Record<string, any>);
+	// 			const lastColumns = lastTable.columns.reduce((acc, col) => {
+	// 				acc[col.name] = col;
+	// 				return acc;
+	// 			}, {} as Record<string, any>);
+	//
+	// 			Object.keys(lastColumns).forEach((columnName) => {
+	// 				if (!(columnName in currentColumns)) {
+	// 					deletedColumns.push({
+	// 						tableName: tableName,
+	// 						columnName: columnName
+	// 					});
+	// 				}
+	// 			});
+	// 		}
+	// 	});
+	//
+	// 	return deletedColumns;
+	// }
+	//
+	// findNewColumns(currentDatabase: any, lastDatabase: any) {
+	// 	const newColumns: any[] = [];
+	//
+	// 	currentDatabase.tables.forEach((currentTable: any) => {
+	// 		const tableName: any = currentTable.name;
+	// 		const lastTable: any = lastDatabase.tables.find((t: any) => t.name === tableName);
+	//
+	// 		if (lastTable) {
+	// 			const currentColumns: any = currentTable.columns.reduce((acc: any, col: any) => {
+	// 				acc[col.name] = col;
+	// 				return acc;
+	// 			}, {});
+	// 			const lastColumns: any = lastTable.columns.reduce((acc: any, col: any) => {
+	// 				acc[col.name] = col;
+	// 				return acc;
+	// 			}, {});
+	//
+	// 			Object.keys(currentColumns).forEach((columnName) => {
+	// 				if (!(columnName in lastColumns)) {
+	// 					newColumns.push({
+	// 						tableName: tableName,
+	// 						column: currentColumns[columnName]
+	// 					});
+	// 				}
+	// 			});
+	// 		}
+	// 	});
+	//
+	// 	return newColumns;
+	// }
+	//
+	//
+	// addDefaultValue(
+	// 	currentDatabase: DatabaseIngotInterface,
+	// 	lastDatabase: DatabaseIngotInterface
+	// ) {
+	// 	const tableChanges: { tableName: string, parameters: AddDefaultValueInterface }[] = [];
+	//
+	// 	if (!currentDatabase.tables)
+	//
+	// 		lastDatabase.tables && lastDatabase.tables.forEach(lastDatabaseTable => {
+	// 			const currentDatabaseTable = currentDatabase.tables &&
+	// 				currentDatabase.tables.find(
+	// 					currentDatabaseTable => lastDatabaseTable.id === currentDatabaseTable.id);
+	//
+	// 			if (!currentDatabaseTable) return;
+	//
+	// 			lastDatabaseTable.columns.forEach(lastDatabaseColumn => {
+	// 					const currentDatabaseColumn = currentDatabaseTable?.columns.find(currentDatabaseColumn => lastDatabaseColumn.id === currentDatabaseColumn.id);
+	// 					if (
+	// 						currentDatabaseColumn &&
+	// 						lastDatabaseColumn.options?.defaultValue !== currentDatabaseColumn.options?.defaultValue
+	// 					) {
+	// 						tableChanges.push({
+	// 							tableName: lastDatabaseTable.name,
+	// 							parameters: {
+	// 								columnName: lastDatabaseColumn.name,
+	// 								value: lastDatabaseColumn.options.defaultValue
+	// 							}
+	// 						});
+	// 					}
+	// 				}
+	// 			);
+	//
+	// 		});
+	//
+	// 	return tableChanges;
+	// };
 
 	private _createMigrationFile(migrationPath: string, migrationName: string, migrationQuery: string) {
 		migrationPath = path.resolve(migrationPath, `${migrationName}.migration.ts`);

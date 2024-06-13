@@ -1,8 +1,10 @@
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddMigrationInterface,
+	CheckTableExistenceInterface,
 	ConnectionData,
 	GetMigrationTableInterface,
+	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
 } from '../common';
 import { DatabaseContextInterface, DatabaseStrategy } from './interfaces';
@@ -55,6 +57,24 @@ export class DatabaseContext implements DatabaseContextInterface {
 			return this.databaseStrategy.updateMigrationStatus(options);
 		} catch (error) {
 			console.log(`Error when changing migration status`);
+			throw error;
+		}
+	}
+
+	async updateMigrationIngot(options: UpdateMigrationIngotInterface): Promise<void> {
+		try {
+			return this.databaseStrategy.updateMigrationIngot(options);
+		} catch (error) {
+			console.log(`Error when changing migration ingot`);
+			throw error;
+		}
+	}
+
+	checkTableExistence(options: CheckTableExistenceInterface): Promise<void> {
+		try {
+			return this.databaseStrategy.checkTableExistence(options);
+		} catch (error) {
+			console.log(`Error when checking table existence`);
 			throw error;
 		}
 	}

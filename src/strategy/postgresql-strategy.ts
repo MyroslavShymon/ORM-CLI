@@ -2,8 +2,10 @@ import { Pool, PoolClient } from 'pg';
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddMigrationInterface,
+	CheckTableExistenceInterface,
 	ConnectionData,
 	GetMigrationTableInterface,
+	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
 } from '../common';
 import { DatabaseStrategy } from './interfaces';
@@ -57,6 +59,7 @@ export class PostgreSqlStrategy implements DatabaseStrategy {
 			throw new Error('Initialize ORM!');
 		}
 
+		//TODO Typing
 		return response.rows[0].ingot;
 	}
 
@@ -74,6 +77,36 @@ export class PostgreSqlStrategy implements DatabaseStrategy {
 		`;
 		await this.client.query(updateMigrationStatusQuery);
 		console.log(`Migration status of ${migrationName} is updated to ${isUp}`);
+	}
+
+	async updateMigrationIngot({
+								   ingot,
+								   migrationTable,
+								   migrationTableSchema,
+								   migrationName
+							   }: UpdateMigrationIngotInterface): Promise<void> {
+		const updateMigrationIngotQuery = `
+					UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
+					SET ingot = '${JSON.stringify(ingot)}'
+					WHERE name = '${migrationName ? migrationName : 'current_database_ingot'}';
+		`;
+		await this.client.query(updateMigrationIngotQuery);
+		console.log(`Ingot of migration ${migrationName ? migrationName : 'current_database_ingot'} is updated`);
+	}
+
+	async checkTableExistence(options: CheckTableExistenceInterface): Promise<void> {
+		const checkTableExistenceQuery = `SELECT EXISTS (
+											  SELECT 1
+											  FROM information_schema.tables
+											  WHERE 
+											  	table_name = '${options.tableName}' and 
+											  	table_schema = '${options.schema ? options.schema : 'public'}'
+											);`;
+		const tableExistence = await this.client.query(checkTableExistenceQuery);
+		if (tableExistence.rows[0].exists === false) {
+			throw new Error(`Table with name ${options.tableName} doesnt exist\n
+			To resolve this Error you need to run app\n`);
+		}
 	}
 
 	async query(sql: string): Promise<any> {
