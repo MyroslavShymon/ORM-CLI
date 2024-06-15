@@ -207,6 +207,7 @@ export class MigrationManager implements MigrationManagerInterface {
 
 		let migrationQuery = '';
 		migrationQuery += await this._handleColumnAdding(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleColumnDeleting(currentDatabaseIngot, lastDatabaseIngot);
 
 		if (!migrationQuery) {
 			console.error('There is no changes to make migration');
@@ -214,6 +215,45 @@ export class MigrationManager implements MigrationManagerInterface {
 		}
 
 		return migrationQuery;
+	}
+
+	async _handleColumnDeleting(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let deleteColumnsQuery = '';
+
+		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		for (const currentColumns of columnOfCurrentDatabaseIngot) {
+			for (const lastColumns of columnOfLastDatabaseIngot) {
+				if (currentColumns.id === lastColumns.id) {
+					const deletedColumns: ColumnInterface[] = lastColumns.columns
+						.filter(
+							lastColumn => !currentColumns.columns
+								.some(currentColumn => currentColumn.id === lastColumn.id)
+						);
+
+					for (const deletedColumn of deletedColumns) {
+						deleteColumnsQuery += await this._databaseManager.tableManipulation
+							.alterTable(currentColumns.name, true)
+							.deleteColumn({ columnName: deletedColumn.name }) + '\n\t\t\t\t';
+					}
+				}
+			}
+		}
+
+		return deleteColumnsQuery;
 	}
 
 	async _handleColumnAdding(
@@ -246,7 +286,7 @@ export class MigrationManager implements MigrationManagerInterface {
 					for (const addedColumn of addedColumns) {
 						addedColumnsQuery += await this._databaseManager.tableManipulation
 							.alterTable(currentColumns.name, true)
-							.addColumn({ columnName: addedColumn.name, options: addedColumn.options });
+							.addColumn({ columnName: addedColumn.name, options: addedColumn.options }) + '\n\t\t\t\t';
 					}
 				}
 			}
