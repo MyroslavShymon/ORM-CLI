@@ -208,6 +208,8 @@ export class MigrationManager implements MigrationManagerInterface {
 		let migrationQuery = '';
 		migrationQuery += await this._handleColumnAdding(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDeleting(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleColumnDefaultValue(currentDatabaseIngot, lastDatabaseIngot);
+
 
 		if (!migrationQuery) {
 			console.error('There is no changes to make migration');
@@ -215,6 +217,76 @@ export class MigrationManager implements MigrationManagerInterface {
 		}
 
 		return migrationQuery;
+	}
+
+	async _handleColumnDefaultValue(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let defaultValueQuery = '';
+
+		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const columnsWithChangedDefaultValue =
+						currentTableIngot.columns
+							.filter(currentColumn =>
+								lastTableIngot.columns
+									.some(lastColumn =>
+										currentColumn.id === lastColumn.id &&
+										currentColumn.options?.defaultValue !== lastColumn.options?.defaultValue &&
+										currentColumn.options?.defaultValue
+									)
+							);
+
+					for (const columnWithChangedDefaultValue of columnsWithChangedDefaultValue) {
+						if (columnWithChangedDefaultValue.options?.defaultValue) {
+							defaultValueQuery += await this._databaseManager.tableManipulation
+								.alterTable(currentTableIngot.name, true)
+								.addDefaultValue(
+									{
+										columnName: columnWithChangedDefaultValue.name,
+										value: columnWithChangedDefaultValue.options.defaultValue
+									}
+								) + '\n\t\t\t\t';
+						}
+					}
+
+					const columnsWithDeletedDefaultValue =
+						currentTableIngot.columns
+							.filter(currentColumn =>
+								lastTableIngot.columns
+									.some(lastColumn =>
+										currentColumn.id === lastColumn.id &&
+										!currentColumn.options?.defaultValue &&
+										lastColumn.options?.defaultValue
+									)
+							);
+
+
+					for (const columnWithDeletedDefaultValue of columnsWithDeletedDefaultValue) {
+						defaultValueQuery += await this._databaseManager.tableManipulation
+							.alterTable(currentTableIngot.name, true)
+							.dropDefaultValue({ columnName: columnWithDeletedDefaultValue.name }) + '\n\t\t\t\t';
+					}
+				}
+			}
+		}
+
+		return defaultValueQuery;
 	}
 
 	async _handleColumnDeleting(
@@ -235,18 +307,18 @@ export class MigrationManager implements MigrationManagerInterface {
 			columns: table.columns
 		}));
 
-		for (const currentColumns of columnOfCurrentDatabaseIngot) {
-			for (const lastColumns of columnOfLastDatabaseIngot) {
-				if (currentColumns.id === lastColumns.id) {
-					const deletedColumns: ColumnInterface[] = lastColumns.columns
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const deletedColumns: ColumnInterface[] = lastTableIngot.columns
 						.filter(
-							lastColumn => !currentColumns.columns
+							lastColumn => !currentTableIngot.columns
 								.some(currentColumn => currentColumn.id === lastColumn.id)
 						);
 
 					for (const deletedColumn of deletedColumns) {
 						deleteColumnsQuery += await this._databaseManager.tableManipulation
-							.alterTable(currentColumns.name, true)
+							.alterTable(currentTableIngot.name, true)
 							.deleteColumn({ columnName: deletedColumn.name }) + '\n\t\t\t\t';
 					}
 				}
@@ -274,18 +346,18 @@ export class MigrationManager implements MigrationManagerInterface {
 			columns: table.columns
 		}));
 
-		for (const currentColumns of columnOfCurrentDatabaseIngot) {
-			for (const lastColumns of columnOfLastDatabaseIngot) {
-				if (currentColumns.id === lastColumns.id) {
-					const addedColumns: ColumnInterface[] = currentColumns.columns
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const addedColumns: ColumnInterface[] = currentTableIngot.columns
 						.filter(
-							currentColumn => !lastColumns.columns
+							currentColumn => !lastTableIngot.columns
 								.some(lastColumn => lastColumn.id === currentColumn.id)
 						);
 
 					for (const addedColumn of addedColumns) {
 						addedColumnsQuery += await this._databaseManager.tableManipulation
-							.alterTable(currentColumns.name, true)
+							.alterTable(currentTableIngot.name, true)
 							.addColumn({ columnName: addedColumn.name, options: addedColumn.options }) + '\n\t\t\t\t';
 					}
 				}
