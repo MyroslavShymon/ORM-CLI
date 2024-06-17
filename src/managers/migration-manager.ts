@@ -206,10 +206,11 @@ export class MigrationManager implements MigrationManagerInterface {
 		}
 
 		let migrationQuery = '';
+
 		migrationQuery += await this._handleColumnAdding(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDeleting(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDefaultValue(currentDatabaseIngot, lastDatabaseIngot);
-
+		migrationQuery += await this._handleColumnDataTypeChange(currentDatabaseIngot, lastDatabaseIngot);
 
 		if (!migrationQuery) {
 			console.error('There is no changes to make migration');
@@ -219,11 +220,62 @@ export class MigrationManager implements MigrationManagerInterface {
 		return migrationQuery;
 	}
 
+	async _handleColumnDataTypeChange(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledDataType = '';
+
+		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const columnsWithChangedDataType = currentTableIngot.columns.filter(
+						currentColumn => lastTableIngot.columns.some(
+							lastColumn =>
+								currentColumn.id === lastColumn.id &&
+								lastColumn.options?.dataType !== currentColumn.options?.dataType
+						)
+					);
+
+					for (const columnWithChangedDataType of columnsWithChangedDataType) {
+						if (columnWithChangedDataType.options?.dataType) {
+							queryWithHandledDataType += await this._databaseManager.tableManipulation
+								.alterTable(currentTableIngot.name, true)
+								.changeDataTypeOfColumn(
+									{
+										columnName: columnWithChangedDataType.name,
+										datatype: columnWithChangedDataType.options.dataType,
+										typeParams: columnWithChangedDataType.options.length ?
+											String(columnWithChangedDataType.options.length) : undefined
+									}
+								) + '\n\t\t\t\t';
+						}
+					}
+				}
+			}
+		}
+
+		return queryWithHandledDataType;
+	}
+
 	async _handleColumnDefaultValue(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
-		let defaultValueQuery = '';
+		let queryWithHandledDefaultValue = '';
 
 		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
 			id: table?.id,
@@ -254,7 +306,7 @@ export class MigrationManager implements MigrationManagerInterface {
 
 					for (const columnWithChangedDefaultValue of columnsWithChangedDefaultValue) {
 						if (columnWithChangedDefaultValue.options?.defaultValue) {
-							defaultValueQuery += await this._databaseManager.tableManipulation
+							queryWithHandledDefaultValue += await this._databaseManager.tableManipulation
 								.alterTable(currentTableIngot.name, true)
 								.addDefaultValue(
 									{
@@ -278,7 +330,7 @@ export class MigrationManager implements MigrationManagerInterface {
 
 
 					for (const columnWithDeletedDefaultValue of columnsWithDeletedDefaultValue) {
-						defaultValueQuery += await this._databaseManager.tableManipulation
+						queryWithHandledDefaultValue += await this._databaseManager.tableManipulation
 							.alterTable(currentTableIngot.name, true)
 							.dropDefaultValue({ columnName: columnWithDeletedDefaultValue.name }) + '\n\t\t\t\t';
 					}
@@ -286,7 +338,7 @@ export class MigrationManager implements MigrationManagerInterface {
 			}
 		}
 
-		return defaultValueQuery;
+		return queryWithHandledDefaultValue;
 	}
 
 	async _handleColumnDeleting(
