@@ -211,13 +211,67 @@ export class MigrationManager implements MigrationManagerInterface {
 		migrationQuery += await this._handleColumnDeleting(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDefaultValue(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDataTypeChange(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleNotNullChange(currentDatabaseIngot, lastDatabaseIngot);
 
 		if (!migrationQuery) {
-			console.error('There is no changes to make migration');
-			throw new Error('There is no changes to make migration');
+			console.error('There is no changes to make migration.\n Please restart your app!');
+			throw new Error('There is no changes to make migration.\n Please restart your app!');
 		}
 
 		return migrationQuery;
+	}
+
+	async _handleNotNullChange(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledNotNull = '';
+
+		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const columnsWithChangedNotNull = currentTableIngot.columns.filter(
+						currentColumn => lastTableIngot.columns.some(
+							lastColumn =>
+								currentColumn.id === lastColumn.id &&
+								lastColumn.options?.nullable !== currentColumn.options?.nullable
+						)
+					);
+
+					console.log('columnsWithChangedNotNull', columnsWithChangedNotNull);
+
+					for (const columnWithChangedNotNull of columnsWithChangedNotNull) {
+						if (!columnWithChangedNotNull.options?.nullable) {
+							queryWithHandledNotNull += await this._databaseManager.tableManipulation
+								.alterTable(currentTableIngot.name, true)
+								.addNotNullToColumn({ columnName: columnWithChangedNotNull.name }
+								) + '\n\t\t\t\t';
+							continue;
+						}
+						
+						queryWithHandledNotNull += await this._databaseManager.tableManipulation
+							.alterTable(currentTableIngot.name, true)
+							.dropNotNullFromColumn({ columnName: columnWithChangedNotNull.name }
+							) + '\n\t\t\t\t';
+					}
+				}
+			}
+		}
+
+		return queryWithHandledNotNull;
 	}
 
 	async _handleColumnDataTypeChange(
