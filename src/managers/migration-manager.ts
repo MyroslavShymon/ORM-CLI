@@ -211,7 +211,9 @@ export class MigrationManager implements MigrationManagerInterface {
 		migrationQuery += await this._handleColumnDeleting(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDefaultValue(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleColumnDataTypeChange(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleNotNullChange(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleColumnNotNullChange(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleColumnUniqueChange(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleColumnCheckConstraintChange(currentDatabaseIngot, lastDatabaseIngot);
 
 		if (!migrationQuery) {
 			console.error('There is no changes to make migration.\n Please restart your app!');
@@ -221,7 +223,119 @@ export class MigrationManager implements MigrationManagerInterface {
 		return migrationQuery;
 	}
 
-	async _handleNotNullChange(
+	async _handleColumnCheckConstraintChange(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledCheckConstraint = '';
+
+		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const columnsWithChangedCheckConstraint = currentTableIngot.columns.filter(
+						currentColumn => lastTableIngot.columns.some(
+							lastColumn =>
+								currentColumn.id === lastColumn.id &&
+								(
+									lastColumn.options?.check !== currentColumn.options?.check ||
+									lastColumn.options?.nameOfCheckConstraint !== currentColumn.options?.nameOfCheckConstraint
+								)
+						)
+					);
+
+					for (const columnWithChangedCheckConstraint of columnsWithChangedCheckConstraint) {
+						if (!columnWithChangedCheckConstraint.options?.check) {
+							queryWithHandledCheckConstraint += await this._databaseManager.tableManipulation
+								.alterTable(currentTableIngot.name, true)
+								.deleteCheckConstraintOfColumn(
+									{ columnName: columnWithChangedCheckConstraint.name }
+								) + '\n\t\t\t\t';
+							continue;
+						}
+
+
+						queryWithHandledCheckConstraint += await this._databaseManager.tableManipulation
+							.alterTable(currentTableIngot.name, true)
+							.addCheckConstraintToColumn(
+								{
+									columnName: columnWithChangedCheckConstraint.name,
+									check: String(columnWithChangedCheckConstraint.options?.check),
+									nameOfCheckConstraint: columnWithChangedCheckConstraint.options?.nameOfCheckConstraint
+								}
+							) + '\n\t\t\t\t';
+					}
+				}
+			}
+		}
+
+		return queryWithHandledCheckConstraint;
+	}
+
+	async _handleColumnUniqueChange(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledUnique = '';
+
+		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+
+		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
+			for (const lastTableIngot of columnOfLastDatabaseIngot) {
+				if (currentTableIngot.id === lastTableIngot.id) {
+					const columnsWithChangedUnique = currentTableIngot.columns.filter(
+						currentColumn => lastTableIngot.columns.some(
+							lastColumn =>
+								currentColumn.id === lastColumn.id &&
+								lastColumn.options?.unique !== currentColumn.options?.unique
+						)
+					);
+
+					for (const columnWithChangedUnique of columnsWithChangedUnique) {
+						if (!columnWithChangedUnique.options?.unique) {
+							queryWithHandledUnique += await this._databaseManager.tableManipulation
+								.alterTable(currentTableIngot.name, true)
+								.deleteUniqueFromColumn({ columnName: columnWithChangedUnique.name }
+								) + '\n\t\t\t\t';
+							continue;
+						}
+
+						queryWithHandledUnique += await this._databaseManager.tableManipulation
+							.alterTable(currentTableIngot.name, true)
+							.addUniqueToColumn({ columnName: columnWithChangedUnique.name }
+							) + '\n\t\t\t\t';
+					}
+				}
+			}
+		}
+
+		return queryWithHandledUnique;
+	}
+
+	async _handleColumnNotNullChange(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -251,8 +365,6 @@ export class MigrationManager implements MigrationManagerInterface {
 						)
 					);
 
-					console.log('columnsWithChangedNotNull', columnsWithChangedNotNull);
-
 					for (const columnWithChangedNotNull of columnsWithChangedNotNull) {
 						if (!columnWithChangedNotNull.options?.nullable) {
 							queryWithHandledNotNull += await this._databaseManager.tableManipulation
@@ -261,7 +373,7 @@ export class MigrationManager implements MigrationManagerInterface {
 								) + '\n\t\t\t\t';
 							continue;
 						}
-						
+
 						queryWithHandledNotNull += await this._databaseManager.tableManipulation
 							.alterTable(currentTableIngot.name, true)
 							.dropNotNullFromColumn({ columnName: columnWithChangedNotNull.name }
@@ -300,7 +412,10 @@ export class MigrationManager implements MigrationManagerInterface {
 						currentColumn => lastTableIngot.columns.some(
 							lastColumn =>
 								currentColumn.id === lastColumn.id &&
-								lastColumn.options?.dataType !== currentColumn.options?.dataType
+								(
+									lastColumn.options?.dataType !== currentColumn.options?.dataType ||
+									lastColumn.options?.length !== currentColumn.options?.length
+								)
 						)
 					);
 
@@ -311,8 +426,8 @@ export class MigrationManager implements MigrationManagerInterface {
 								.changeDataTypeOfColumn(
 									{
 										columnName: columnWithChangedDataType.name,
-										datatype: columnWithChangedDataType.options.dataType,
-										typeParams: columnWithChangedDataType.options.length ?
+										dataType: columnWithChangedDataType.options.dataType,
+										length: columnWithChangedDataType.options.length ?
 											String(columnWithChangedDataType.options.length) : undefined
 									}
 								) + '\n\t\t\t\t';
