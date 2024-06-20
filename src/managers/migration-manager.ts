@@ -13,11 +13,13 @@ import { DatabaseContextInterface } from '../strategy';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import {
 	ColumnOfDatabaseIngotInterface,
+	MatchedManyToManyRelationsInterface,
 	OneToManyRelationsOfDatabaseIngotInterface,
 	OneToOneRelationsOfDatabaseIngotInterface
 } from './interfaces';
 import { TableIngotInterface } from '@myroslavshymon/orm/orm/core/interfaces/table-ingot.interface';
 import { DataSourceInterface } from '@myroslavshymon/orm/orm/core/interfaces/data-source.interface';
+import { DataSourcePostgres } from '@myroslavshymon/orm/orm/strategies/postgres';
 
 export class MigrationManager implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
@@ -102,6 +104,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		const isMigrationsExist = fs.readdirSync(migrationPath).length !== 0;
 
 		migrationName = await this._generateMigrationName(migrationName, isMigrationsExist);
+
 		await this._handleMigrationCreation(migrationPath, migrationName, isMigrationsExist);
 	}
 
@@ -158,7 +161,16 @@ export class MigrationManager implements MigrationManagerInterface {
 			]);
 			return userInput.migrationName ? (Date.now() + '_' + 'init') : await this._promptMigrationName();
 		}
-
+		if (typeof migrationName === 'string') {
+			const migrationsByName = await this._databaseContext.getMigrationByName({
+				migrationName: migrationName,
+				migrationTableSchema: this._connectionData.migrationTableSchema,
+				migrationTable: this._connectionData.migrationTable
+			});
+			if (migrationsByName.length) {
+				throw Error(`Migrations with name '${migrationName}' already exist`);
+			}
+		}
 		return migrationName === true ? await this._promptMigrationName() : (Date.now() + '_' + (migrationName as string));
 	}
 
@@ -239,90 +251,136 @@ export class MigrationManager implements MigrationManagerInterface {
 		return migrationQuery;
 	}
 
-	async _handleManyToManyRelationsOfTable(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledManyToManyRelation = '';
-		let mismatchedLastTableManyToManyRelations: ManyToManyInterface[] = [];
+	private _validateManyToManyRelations(tables: TableIngotInterface<DataSourceInterface>[]): void {
+		const manyToManyRelations = tables.flatMap(table => table.manyToMany);
 
-		const findManyToManyMatches = (tables: TableIngotInterface<DataSourceInterface>[]): void => {
-			const manyToManyRelations: ManyToManyInterface[] = [];
-			for (const table of tables) {
-				if (table.manyToMany.length) {
-					for (const manyToMany of table.manyToMany) {
-						manyToManyRelations.push(manyToMany);
-					}
-				}
-			}
-
-			// // Знайти елементи, які мають відповідники
-			//  manyToManyRelations.filter(relation => {
-			// 	return manyToManyRelations.some(otherRelation =>
-			// 		relation.referencedTable === otherRelation.tableName &&
-			// 		otherRelation.referencedTable === relation.tableName
-			// 	);
-			// });
-
-			const elementsWithoutMatchingReferences = manyToManyRelations.filter(relation => {
-				return !manyToManyRelations.some(otherRelation =>
+		const findUnmatchedRelations = (relations: ManyToManyInterface[]): ManyToManyInterface[] => {
+			return relations.filter(relation =>
+				!relations.some(otherRelation =>
 					relation.referencedTable === otherRelation.tableName &&
 					otherRelation.referencedTable === relation.tableName
-				);
-			});
-
-			if (elementsWithoutMatchingReferences.length > 0) {
-				throw new Error('You must write many to many decorator in another table to make relation correct!');
-			}
-
+				)
+			);
 		};
 
-		findManyToManyMatches(currentDatabaseIngot.tables);
+		const unmatchedRelations = findUnmatchedRelations(manyToManyRelations);
 
-		for (const currentTableIngot of currentDatabaseIngot.tables) {
-			for (const lastTableIngot of lastDatabaseIngot.tables) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const currentManyToManySet = new Set(currentTableIngot.manyToMany.map(rel => JSON.stringify(rel)));
-					const lastManyToManySet = new Set(lastTableIngot.manyToMany.map(rel => JSON.stringify(rel)));
-
-					for (const currentTableManyToManyRelations of currentTableIngot.manyToMany) {
-						if (!lastManyToManySet.has(JSON.stringify(currentTableManyToManyRelations))) {
-							queryWithHandledManyToManyRelation += this._databaseManager.tableCreator
-								.generateCreateTableQueryForManyToManyRelation([{
-									tableName: currentTableIngot.name,
-									manyToManyRelation: currentTableIngot.manyToMany
-								}]) + '\n\t\t\t\t';
-							console.log('queryWithHandledManyToManyRelation', queryWithHandledManyToManyRelation);
-						}
-					}
-
-					for (const lastTableManyToManyRelation of lastTableIngot.manyToMany) {
-						if (!currentManyToManySet.has(JSON.stringify(lastTableManyToManyRelation))) {
-							mismatchedLastTableManyToManyRelations.push(lastTableManyToManyRelation);
-						}
-					}
-				}
-			}
+		if (unmatchedRelations.length > 0) {
+			throw new Error('You must write many to many decorator in another table to make relation correct!');
 		}
+	};
+
+	private _getManyToManyMatches(tables: TableIngotInterface<DataSourceInterface>[]): MatchedManyToManyRelationsInterface[] {
+		const manyToManyRelations = tables.flatMap(table => table.manyToMany);
+
+		const matchedRelations = manyToManyRelations.filter(relation =>
+			manyToManyRelations.some(otherRelation =>
+				relation.referencedTable === otherRelation.tableName &&
+				otherRelation.referencedTable === relation.tableName
+			)
+		);
 
 		const uniquePairs = new Set<string>();
+		const newRelations: MatchedManyToManyRelationsInterface[] = [];
 
-		mismatchedLastTableManyToManyRelations.forEach(relation => {
+		matchedRelations.forEach(relation => {
 			const pair1 = `${relation.tableName}_${relation.referencedTable}`;
 			const pair2 = `${relation.referencedTable}_${relation.tableName}`;
 
 			if (!uniquePairs.has(pair2)) {
 				uniquePairs.add(pair1);
+				newRelations.push({ ...relation, futureTableName: pair1 });
+			} else {
+				newRelations.push({ ...relation, futureTableName: pair2 });
 			}
 		});
-		console.log('Array.from(uniquePairs)', Array.from(uniquePairs));
 
-		for (const tableName of Array.from(uniquePairs)) {
+		return newRelations;
+	};
+
+	async _handleManyToManyRelationsOfTable(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledManyToManyRelation = '';
+
+		this._validateManyToManyRelations(currentDatabaseIngot.tables);
+
+		const currentRelations = this._getManyToManyMatches(currentDatabaseIngot.tables);
+		const lastRelations = this._getManyToManyMatches(lastDatabaseIngot.tables);
+
+		const currentRelationsSet = new Set(currentRelations.map(relation => JSON.stringify(relation)));
+		const lastRelationsSet = new Set(lastRelations.map(relation => JSON.stringify(relation)));
+
+		const addedRelations = currentRelations.filter(relation => !lastRelationsSet.has(JSON.stringify(relation)));
+
+		const tableNamesOfRemovedRelations: string[] = Array.from(
+			new Set(lastRelations
+				.filter(relation => !currentRelationsSet.has(JSON.stringify(relation)))
+				.map(removedRelation => removedRelation.futureTableName)
+			));
+
+		for (const tableName of tableNamesOfRemovedRelations) {
 			queryWithHandledManyToManyRelation += await this._databaseManager.tableManipulation
 				.alterTable(tableName, true)
 				.dropTable({ type: 'CASCADE' }) + '\n\t\t\t\t';
 		}
+
+		const groupedRelations: { [key: string]: ManyToManyInterface[] } = {};
+
+		for (const relation of addedRelations) {
+			if (!groupedRelations[relation.futureTableName]) {
+				groupedRelations[relation.futureTableName] = [];
+			}
+			groupedRelations[relation.futureTableName].push(relation);
+		}
+
+		const tableIngots: TableIngotInterface<DataSourcePostgres>[] = Object.keys(groupedRelations).map(futureTableName => {
+			const relations = groupedRelations[futureTableName];
+			return {
+				name: futureTableName,
+				options: { primaryKeys: relations.map(relation => relation.foreignKey) },
+				columns: relations.map(relation => ({ name: relation.foreignKey, options: { dataType: 'INT' } })),
+				computedColumns: [],
+				foreignKeys: relations.map(relation => ({
+					key: relation.referencedColumn,
+					table: relation.referencedTable,
+					columnName: relation.foreignKey
+				})),
+				primaryColumn: { columnName: 'id', type: 'BIGINT' },
+				oneToOne: [],
+				oneToMany: [],
+				manyToMany: []
+			};
+		});
+
+		for (const tableIngot of tableIngots) {
+			queryWithHandledManyToManyRelation += this._databaseManager.tableCreator.generateCreateTableQuery([tableIngot]) + '\n\t\t\t\t';
+		}
+
 		return queryWithHandledManyToManyRelation;
+	}
+
+	private _checkOneToManyRelations(databaseIngot: DatabaseIngotInterface): void {
+		const { tables } = databaseIngot;
+
+		tables.forEach(table => {
+			table.oneToMany.forEach(otm => {
+				const columnForeignKey = table.columns.find(column => column.name === otm.foreignKey);
+				if (!columnForeignKey) {
+					throw Error(`There is no foreign key '${otm.foreignKey}' in table '${otm.tableName}'.`);
+				}
+
+				const correspondingTable = tables.find(t => t.name === otm.tableName);
+				if (!correspondingTable) {
+					throw new Error(`Table '${otm.tableName}' referenced in OneToMany relation not found.`);
+				}
+
+				if (correspondingTable.primaryColumn.columnName !== otm.referenceColumn) {
+					throw new Error(`Reference column '${otm.referenceColumn}' in OneToMany relation does not match primary column '${correspondingTable.primaryColumn.columnName}' in table '${otm.tableName}'.`);
+				}
+			});
+		});
 	}
 
 	async _handleOneToManyRelationsOfTable(
@@ -330,6 +388,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
 		let queryWithHandledOneToManyRelation = '';
+		this._checkOneToManyRelations(currentDatabaseIngot);
 
 		const oneToManyRelationsOfCurrentDatabaseIngot: OneToManyRelationsOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
 			id: table?.id,
@@ -380,11 +439,34 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledOneToManyRelation;
 	}
 
-	async _handleOneToOneRelationsOfTable(
+	private _checkOneToOneRelations(databaseIngot: DatabaseIngotInterface): void {
+		const { tables } = databaseIngot;
+
+		tables.forEach(table => {
+			table.oneToOne.forEach(oto => {
+				const columnForeignKey = table.columns.find(column => column.name === oto.foreignKey);
+				if (!columnForeignKey) {
+					throw Error(`There is no foreign key '${oto.foreignKey}' in table '${oto.table}'.`);
+				}
+
+				const correspondingTable = tables.find(t => t.name === oto.table);
+				if (!correspondingTable) {
+					throw new Error(`Table '${oto.table}' referenced in OneToOne relation not found.`);
+				}
+
+				if (correspondingTable.primaryColumn.columnName !== oto.referenceColumn) {
+					throw new Error(`Reference column '${oto.referenceColumn}' in OneToOne relation does not match primary column '${correspondingTable.primaryColumn.columnName}' in table '${oto.table}'.`);
+				}
+			});
+		});
+	}
+
+	private async _handleOneToOneRelationsOfTable(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
 		let queryWithHandledOneToOneRelation = '';
+		this._checkOneToOneRelations(currentDatabaseIngot);
 
 		const oneToOneRelationsOfCurrentDatabaseIngot: OneToOneRelationsOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
 			id: table?.id,
@@ -433,7 +515,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledOneToOneRelation;
 	}
 
-	async _handleRenameOfColumn(
+	private async _handleRenameOfColumn(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -484,7 +566,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledRenameOfColumn;
 	}
 
-	async _handleColumnCheckConstraintChange(
+	private async _handleColumnCheckConstraintChange(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -545,7 +627,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledCheckConstraint;
 	}
 
-	async _handleColumnUniqueChange(
+	private async _handleColumnUniqueChange(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -596,7 +678,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledUnique;
 	}
 
-	async _handleColumnNotNullChange(
+	private async _handleColumnNotNullChange(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -647,7 +729,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledNotNull;
 	}
 
-	async _handleColumnDataTypeChange(
+	private async _handleColumnDataTypeChange(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -701,7 +783,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledDataType;
 	}
 
-	async _handleColumnDefaultValue(
+	private async _handleColumnDefaultValue(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -771,7 +853,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledDefaultValue;
 	}
 
-	async _handleColumnDeleting(
+	private async _handleColumnDeleting(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {
@@ -810,7 +892,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return deleteColumnsQuery;
 	}
 
-	async _handleColumnAdding(
+	private async _handleColumnAdding(
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface
 	): Promise<string> {

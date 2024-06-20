@@ -3,6 +3,7 @@ import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
 	ConnectionData,
+	GetMigrationByNameInterface,
 	GetMigrationTableInterface,
 	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
@@ -75,6 +76,15 @@ export class DatabaseContext implements DatabaseContextInterface {
 			return this.databaseStrategy.checkTableExistence(options);
 		} catch (error) {
 			console.log(`Error when checking table existence`);
+			throw error;
+		}
+	}
+
+	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string }[]> {
+		try {
+			return this.databaseStrategy.getMigrationByName(options);
+		} catch (error) {
+			console.log(`Error when getting migration by name`);
 			throw error;
 		}
 	}

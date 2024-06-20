@@ -4,6 +4,7 @@ import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
 	ConnectionData,
+	GetMigrationByNameInterface,
 	GetMigrationTableInterface,
 	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
@@ -107,6 +108,16 @@ export class PostgreSqlStrategy implements DatabaseStrategy {
 			throw new Error(`Table with name ${options.tableName} doesnt exist\n
 			To resolve this Error you need to run app\n`);
 		}
+	}
+
+	async getMigrationByName({
+								 migrationName,
+								 migrationTable,
+								 migrationTableSchema
+							 }: GetMigrationByNameInterface): Promise<{ name: string }[]> {
+		const getMigrationByNameQuery = `SELECT name FROM ${migrationTableSchema}.${migrationTable} WHERE name LIKE '%${migrationName}'`;
+		const migrations = await this.client.query(getMigrationByNameQuery);
+		return migrations.rows;
 	}
 
 	async query(sql: string): Promise<any> {

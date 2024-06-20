@@ -5,3 +5,4 @@ export * from './init-manager.interface';
 export * from './update-migration-status.interface';
 export * from './update-migration-ingot.interface';
 export * from './check-table-existence.interface';
+export * from './get-migration-by-name.interface';

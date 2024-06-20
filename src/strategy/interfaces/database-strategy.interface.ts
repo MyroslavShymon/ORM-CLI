@@ -3,6 +3,7 @@ import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
 	ConnectionData,
+	GetMigrationByNameInterface,
 	GetMigrationTableInterface,
 	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
@@ -24,6 +25,8 @@ export interface DatabaseStrategy {
 	updateMigrationStatus(options: UpdateMigrationStatusInterface): Promise<void>;
 
 	updateMigrationIngot(options: UpdateMigrationIngotInterface): Promise<void>;
+
+	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string }[]>;
 
 	query(sql: string): Promise<any>;
 }

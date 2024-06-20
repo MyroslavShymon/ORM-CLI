@@ -5,6 +5,7 @@ import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
 	ConnectionData,
+	GetMigrationByNameInterface,
 	GetMigrationTableInterface,
 	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
@@ -96,6 +97,14 @@ export class MySqlStrategy implements DatabaseStrategy {
 
 	async checkTableExistence(options: CheckTableExistenceInterface): Promise<void> {
 		console.log('checkTableExistence', options);
+	}
+
+	async getMigrationByName({
+								 migrationName,
+								 migrationTable,
+								 migrationTableSchema
+							 }: GetMigrationByNameInterface): Promise<any> {
+		console.log('getMigrationByNameQuery');
 	}
 
 	async query(sql: string): Promise<any> {
