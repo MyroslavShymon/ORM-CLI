@@ -242,6 +242,9 @@ export class MigrationManager implements MigrationManagerInterface {
 		migrationQuery += await this._handleOneToOneRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleOneToManyRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleManyToManyRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleTableAdding(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleTableRemoving(currentDatabaseIngot, lastDatabaseIngot);
+		migrationQuery += await this._handleRenameOfTables(currentDatabaseIngot, lastDatabaseIngot);
 
 		if (!migrationQuery) {
 			console.error('There is no changes to make migration.\n Please restart your app!');
@@ -249,6 +252,60 @@ export class MigrationManager implements MigrationManagerInterface {
 		}
 
 		return migrationQuery;
+	}
+
+	private async _handleRenameOfTables(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledRenamedTables = '';
+
+		for (const currentTable of currentDatabaseIngot.tables) {
+			for (const lastTable of lastDatabaseIngot.tables) {
+				if (
+					lastTable.id === currentTable.id &&
+					lastTable.name !== currentTable.name
+				) {
+					queryWithHandledRenamedTables += await this._databaseManager.tableManipulation
+						.alterTable(lastTable.name, true)
+						.renameTable({ tableName: currentTable.name }) + '\n\t\t\t\t';
+				}
+			}
+		}
+
+		return queryWithHandledRenamedTables;
+	}
+
+	private async _handleTableAdding(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		const newTables = currentDatabaseIngot.tables.filter(currentTable =>
+			!lastDatabaseIngot.tables
+				.some(lastTable => lastTable.id === currentTable.id)
+		);
+
+		return this._databaseManager.tableCreator.generateCreateTableQuery(newTables);
+	}
+
+	private async _handleTableRemoving(
+		currentDatabaseIngot: DatabaseIngotInterface,
+		lastDatabaseIngot: DatabaseIngotInterface
+	): Promise<string> {
+		let queryWithHandledRemovingTables = '';
+
+		const removedTables = lastDatabaseIngot.tables.filter(lastTable =>
+			!currentDatabaseIngot.tables
+				.some(currentTable => currentTable.id === lastTable.id)
+		);
+
+		for (const deletedTable of removedTables) {
+			queryWithHandledRemovingTables += await this._databaseManager.tableManipulation
+				.alterTable(deletedTable.name, true)
+				.dropTable({ type: 'CASCADE' }) + '\n\t\t\t\t';
+		}
+
+		return queryWithHandledRemovingTables;
 	}
 
 	private _validateManyToManyRelations(tables: TableIngotInterface<DataSourceInterface>[]): void {
