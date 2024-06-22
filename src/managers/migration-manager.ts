@@ -1,25 +1,46 @@
 import path from 'path';
 import fs from 'fs';
 import prompts from 'prompts';
-import {
-	ColumnInterface,
-	DatabaseIngotInterface,
-	DatabaseManagerInterface,
-	ManyToManyInterface
-} from '@myroslavshymon/orm/orm/core';
 import * as tsNode from 'ts-node';
 import { ConnectionData, convertToCamelCase, createDirectoryIfNotExists, MigrationManagerInterface } from '../common';
 import { DatabaseContextInterface } from '../strategy';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import {
-	ColumnOfDatabaseIngotInterface,
+	CommandClass,
+	CompressedTableIngotInterface,
 	MatchedManyToManyRelationsInterface,
+	MigrationQueriesInterface,
 	OneToManyRelationsOfDatabaseIngotInterface,
-	OneToOneRelationsOfDatabaseIngotInterface
-} from './interfaces';
+	OneToOneRelationsOfDatabaseIngotInterface,
+	OperationClass
+} from './common';
 import { TableIngotInterface } from '@myroslavshymon/orm/orm/core/interfaces/table-ingot.interface';
 import { DataSourceInterface } from '@myroslavshymon/orm/orm/core/interfaces/data-source.interface';
 import { DataSourcePostgres } from '@myroslavshymon/orm/orm/strategies/postgres';
+import { DatabaseIngotInterface, DatabaseManagerInterface, ManyToManyInterface } from '@myroslavshymon/orm/orm/core';
+import {
+	AddColumnCommand,
+	AddColumnOperation,
+	AddDefaultValueCommand,
+	AddDefaultValueToColumnOperation,
+	ChangeCheckConstraintCommand,
+	ChangeCheckConstraintOfColumnOperation,
+	ChangeDataTypeCommand,
+	ChangeDataTypeOfColumnOperation,
+	ChangeNotNullCommand,
+	ChangeNotNullOfColumnOperation,
+	ChangeUniqueCommand,
+	ChangeUniqueValueOfColumnOperation,
+	DeleteColumnCommand,
+	DeleteColumnOperation,
+	DeleteDefaultValueCommand,
+	DeleteDefaultValueFromColumnOperation,
+	MigrationCommandInterface,
+	MigrationInvoker,
+	OperationInterface,
+	RenameColumnCommand,
+	RenameOfColumnOperation
+} from './commands';
 
 export class MigrationManager implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
@@ -205,8 +226,8 @@ export class MigrationManager implements MigrationManagerInterface {
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
 
-		const migrationQuery = await this._createMigrationQuery(currentDatabaseIngot, lastDatabaseIngot, isMigrationsExist);
-		this._createMigrationFile(migrationPath, migrationName, migrationQuery);
+		const migrationQueries = await this._createMigrationQuery(currentDatabaseIngot, lastDatabaseIngot, isMigrationsExist);
+		this._createMigrationFile(migrationPath, migrationName, migrationQueries.migrationQuery, migrationQueries.undoMigrationQuery);
 
 		await this._databaseContext.createMigration({
 			migrationName,
@@ -224,34 +245,60 @@ export class MigrationManager implements MigrationManagerInterface {
 		currentDatabaseIngot: DatabaseIngotInterface,
 		lastDatabaseIngot: DatabaseIngotInterface,
 		isMigrationsExist: boolean
-	): Promise<string> {
-		if (!isMigrationsExist) {
-			return this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
-		}
-
+	): Promise<MigrationQueriesInterface> {
 		let migrationQuery = '';
+		let undoMigrationQuery = '';
+		// if (!isMigrationsExist) {
+		// 	return this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
+		// }
 
-		migrationQuery += await this._handleColumnAdding(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleColumnDeleting(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleColumnDefaultValue(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleColumnDataTypeChange(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleColumnNotNullChange(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleColumnUniqueChange(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleColumnCheckConstraintChange(currentDatabaseIngot, lastDatabaseIngot);
-		migrationQuery += await this._handleRenameOfColumn(currentDatabaseIngot, lastDatabaseIngot);
+		const currentCompressedTables: CompressedTableIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const lastCompressedTables: CompressedTableIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+			id: table?.id,
+			name: table.name,
+			columns: table.columns
+		}));
+
+		const invoker = new MigrationInvoker();
+
+		const executeOperation = async <O extends OperationInterface, C extends MigrationCommandInterface>
+		(operationClass: OperationClass<O>, commandClass: CommandClass<O, C>) => {
+			const operation = new operationClass(this._databaseManager, currentCompressedTables, lastCompressedTables);
+			const command = new commandClass(operation);
+			migrationQuery += await invoker.executeCommand(command);
+			undoMigrationQuery += await invoker.undoCommand();
+		};
+
+		await executeOperation<AddColumnOperation, AddColumnCommand>(AddColumnOperation, AddColumnCommand);
+		await executeOperation<DeleteColumnOperation, DeleteColumnCommand>(DeleteColumnOperation, DeleteColumnCommand);
+		await executeOperation<AddDefaultValueToColumnOperation, AddDefaultValueCommand>(AddDefaultValueToColumnOperation, AddDefaultValueCommand);
+		await executeOperation<DeleteDefaultValueFromColumnOperation, DeleteDefaultValueCommand>(DeleteDefaultValueFromColumnOperation, DeleteDefaultValueCommand);
+		await executeOperation<ChangeDataTypeOfColumnOperation, ChangeDataTypeCommand>(ChangeDataTypeOfColumnOperation, ChangeDataTypeCommand);
+		await executeOperation<ChangeNotNullOfColumnOperation, ChangeNotNullCommand>(ChangeNotNullOfColumnOperation, ChangeNotNullCommand);
+		await executeOperation<ChangeUniqueValueOfColumnOperation, ChangeUniqueCommand>(ChangeUniqueValueOfColumnOperation, ChangeUniqueCommand);
+		await executeOperation<ChangeCheckConstraintOfColumnOperation, ChangeCheckConstraintCommand>(ChangeCheckConstraintOfColumnOperation, ChangeCheckConstraintCommand);
+		await executeOperation<RenameOfColumnOperation, RenameColumnCommand>(RenameOfColumnOperation, RenameColumnCommand);
+
 		migrationQuery += await this._handleOneToOneRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleOneToManyRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleManyToManyRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot);
+
 		migrationQuery += await this._handleTableAdding(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleTableRemoving(currentDatabaseIngot, lastDatabaseIngot);
 		migrationQuery += await this._handleRenameOfTables(currentDatabaseIngot, lastDatabaseIngot);
 
+		// || !undoMigrationQuery
 		if (!migrationQuery) {
 			console.error('There is no changes to make migration.\n Please restart your app!');
 			throw new Error('There is no changes to make migration.\n Please restart your app!');
 		}
 
-		return migrationQuery;
+		return { migrationQuery, undoMigrationQuery };
 	}
 
 	private async _handleRenameOfTables(
@@ -572,442 +619,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		return queryWithHandledOneToOneRelation;
 	}
 
-	private async _handleRenameOfColumn(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledRenameOfColumn = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWhoseNameHasChanged = currentTableIngot.columns.reduce(
-						(acc: any[], currentColumn) => {
-							const lastColumn = lastTableIngot.columns
-								.find(lastColumn => lastColumn.id === currentColumn.id);
-
-							if (lastColumn && currentColumn.name !== lastColumn.name) {
-								acc.push({
-									...currentColumn,
-									futureColumnName: currentColumn.name,
-									columnName: lastColumn.name
-								});
-							}
-							return acc;
-						}, []);
-
-					for (const { columnName, futureColumnName } of columnsWhoseNameHasChanged) {
-						queryWithHandledRenameOfColumn += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.renameColumn(
-								{ columnName, futureColumnName }
-							) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return queryWithHandledRenameOfColumn;
-	}
-
-	private async _handleColumnCheckConstraintChange(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledCheckConstraint = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWithChangedCheckConstraint = currentTableIngot.columns.filter(
-						currentColumn => lastTableIngot.columns.some(
-							lastColumn =>
-								currentColumn.id === lastColumn.id &&
-								(
-									lastColumn.options?.check !== currentColumn.options?.check ||
-									lastColumn.options?.nameOfCheckConstraint !== currentColumn.options?.nameOfCheckConstraint
-								)
-						)
-					);
-
-					for (const columnWithChangedCheckConstraint of columnsWithChangedCheckConstraint) {
-						if (!columnWithChangedCheckConstraint.options?.check) {
-							queryWithHandledCheckConstraint += await this._databaseManager.tableManipulation
-								.alterTable(currentTableIngot.name, true)
-								.deleteCheckConstraintOfColumn(
-									{ columnName: columnWithChangedCheckConstraint.name }
-								) + '\n\t\t\t\t';
-							continue;
-						}
-
-
-						queryWithHandledCheckConstraint += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.addCheckConstraintToColumn(
-								{
-									columnName: columnWithChangedCheckConstraint.name,
-									check: String(columnWithChangedCheckConstraint.options?.check),
-									nameOfCheckConstraint: columnWithChangedCheckConstraint.options?.nameOfCheckConstraint
-								}
-							) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return queryWithHandledCheckConstraint;
-	}
-
-	private async _handleColumnUniqueChange(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledUnique = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWithChangedUnique = currentTableIngot.columns.filter(
-						currentColumn => lastTableIngot.columns.some(
-							lastColumn =>
-								currentColumn.id === lastColumn.id &&
-								lastColumn.options?.unique !== currentColumn.options?.unique
-						)
-					);
-
-					for (const columnWithChangedUnique of columnsWithChangedUnique) {
-						if (!columnWithChangedUnique.options?.unique) {
-							queryWithHandledUnique += await this._databaseManager.tableManipulation
-								.alterTable(currentTableIngot.name, true)
-								.deleteUniqueFromColumn({ columnName: columnWithChangedUnique.name }
-								) + '\n\t\t\t\t';
-							continue;
-						}
-
-						queryWithHandledUnique += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.addUniqueToColumn({ columnName: columnWithChangedUnique.name }
-							) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return queryWithHandledUnique;
-	}
-
-	private async _handleColumnNotNullChange(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledNotNull = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWithChangedNotNull = currentTableIngot.columns.filter(
-						currentColumn => lastTableIngot.columns.some(
-							lastColumn =>
-								currentColumn.id === lastColumn.id &&
-								lastColumn.options?.nullable !== currentColumn.options?.nullable
-						)
-					);
-
-					for (const columnWithChangedNotNull of columnsWithChangedNotNull) {
-						if (!columnWithChangedNotNull.options?.nullable) {
-							queryWithHandledNotNull += await this._databaseManager.tableManipulation
-								.alterTable(currentTableIngot.name, true)
-								.addNotNullToColumn({ columnName: columnWithChangedNotNull.name }
-								) + '\n\t\t\t\t';
-							continue;
-						}
-
-						queryWithHandledNotNull += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.dropNotNullFromColumn({ columnName: columnWithChangedNotNull.name }
-							) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return queryWithHandledNotNull;
-	}
-
-	private async _handleColumnDataTypeChange(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledDataType = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWithChangedDataType = currentTableIngot.columns.filter(
-						currentColumn => lastTableIngot.columns.some(
-							lastColumn =>
-								currentColumn.id === lastColumn.id &&
-								(
-									lastColumn.options?.dataType !== currentColumn.options?.dataType ||
-									lastColumn.options?.length !== currentColumn.options?.length
-								)
-						)
-					);
-
-					for (const columnWithChangedDataType of columnsWithChangedDataType) {
-						if (columnWithChangedDataType.options?.dataType) {
-							queryWithHandledDataType += await this._databaseManager.tableManipulation
-								.alterTable(currentTableIngot.name, true)
-								.changeDataTypeOfColumn(
-									{
-										columnName: columnWithChangedDataType.name,
-										dataType: columnWithChangedDataType.options.dataType,
-										length: columnWithChangedDataType.options.length ?
-											String(columnWithChangedDataType.options.length) : undefined
-									}
-								) + '\n\t\t\t\t';
-						}
-					}
-				}
-			}
-		}
-
-		return queryWithHandledDataType;
-	}
-
-	private async _handleColumnDefaultValue(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let queryWithHandledDefaultValue = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWithChangedDefaultValue =
-						currentTableIngot.columns
-							.filter(currentColumn =>
-								lastTableIngot.columns
-									.some(lastColumn =>
-										currentColumn.id === lastColumn.id &&
-										currentColumn.options?.defaultValue !== lastColumn.options?.defaultValue &&
-										currentColumn.options?.defaultValue
-									)
-							);
-
-					for (const columnWithChangedDefaultValue of columnsWithChangedDefaultValue) {
-						if (columnWithChangedDefaultValue.options?.defaultValue) {
-							queryWithHandledDefaultValue += await this._databaseManager.tableManipulation
-								.alterTable(currentTableIngot.name, true)
-								.addDefaultValue(
-									{
-										columnName: columnWithChangedDefaultValue.name,
-										value: columnWithChangedDefaultValue.options.defaultValue
-									}
-								) + '\n\t\t\t\t';
-						}
-					}
-
-					const columnsWithDeletedDefaultValue =
-						currentTableIngot.columns
-							.filter(currentColumn =>
-								lastTableIngot.columns
-									.some(lastColumn =>
-										currentColumn.id === lastColumn.id &&
-										!currentColumn.options?.defaultValue &&
-										lastColumn.options?.defaultValue
-									)
-							);
-
-
-					for (const columnWithDeletedDefaultValue of columnsWithDeletedDefaultValue) {
-						queryWithHandledDefaultValue += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.dropDefaultValue({ columnName: columnWithDeletedDefaultValue.name }) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return queryWithHandledDefaultValue;
-	}
-
-	private async _handleColumnDeleting(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let deleteColumnsQuery = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns
-		}));
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const deletedColumns: ColumnInterface[] = lastTableIngot.columns
-						.filter(
-							lastColumn => !currentTableIngot.columns
-								.some(currentColumn => currentColumn.id === lastColumn.id)
-						);
-
-					for (const deletedColumn of deletedColumns) {
-						deleteColumnsQuery += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.deleteColumn({ columnName: deletedColumn.name }) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return deleteColumnsQuery;
-	}
-
-	private async _handleColumnAdding(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface
-	): Promise<string> {
-		let addedColumnsQuery = '';
-
-		const columnOfCurrentDatabaseIngot: ColumnOfDatabaseIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns,
-			primaryColumn: table.primaryColumn
-		}));
-
-		const columnOfLastDatabaseIngot: ColumnOfDatabaseIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
-			id: table?.id,
-			name: table.name,
-			columns: table.columns,
-			primaryColumn: table.primaryColumn
-		}));
-
-		for (const currentTableIngot of columnOfCurrentDatabaseIngot) {
-			for (const lastTableIngot of columnOfLastDatabaseIngot) {
-				if (currentTableIngot.id === lastTableIngot.id) {
-					const addedColumns: ColumnInterface[] = currentTableIngot.columns
-						.filter(
-							currentColumn => !lastTableIngot.columns
-								.some(lastColumn => lastColumn.id === currentColumn.id)
-						);
-
-					for (const addedColumn of addedColumns) {
-						addedColumnsQuery += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.addColumn({ columnName: addedColumn.name, options: addedColumn.options }) + '\n\t\t\t\t';
-					}
-
-					if (currentTableIngot.primaryColumn && !lastTableIngot.primaryColumn) {
-						addedColumnsQuery += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.addPrimaryGeneratedColumn({
-								columnName: currentTableIngot.primaryColumn.columnName,
-								type: currentTableIngot.primaryColumn.type
-							}) + '\n\t\t\t\t';
-					}
-
-					if (!currentTableIngot.primaryColumn && lastTableIngot.primaryColumn) {
-						addedColumnsQuery += await this._databaseManager.tableManipulation
-							.alterTable(currentTableIngot.name, true)
-							.deleteColumn({
-								columnName: lastTableIngot.primaryColumn.columnName
-							}) + '\n\t\t\t\t';
-					}
-				}
-			}
-		}
-
-		return addedColumnsQuery;
-	}
-
-	private _createMigrationFile(migrationPath: string, migrationName: string, migrationQuery: string) {
+	private _createMigrationFile(migrationPath: string, migrationName: string, migrationQuery: string, undoMigrationQuery: string) {
 		migrationPath = path.resolve(migrationPath, `${migrationName}.migration.ts`);
 		migrationName = convertToCamelCase(migrationName.split('_').slice(1).join(''));
 
@@ -1022,7 +634,7 @@ export class ${migrationName} implements MigrationInterface {
 
    async down(databaseManager: DatabaseManagerInterface): Promise<void> {
        await databaseManager.query(
-           'SELECT * from public.migrations'
+             \`${undoMigrationQuery}\`
        );
     }
 }`;
