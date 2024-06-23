@@ -1,6 +1,7 @@
-import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import { ColumnInterface, ComputedColumnInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common';
+import { ColumnChangeInfo } from '../interfaces';
 
 export abstract class RenameOfColumnOperationTemplate {
 	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
@@ -20,22 +21,20 @@ export abstract class RenameOfColumnOperationTemplate {
 		for (const currentTableIngot of currentTableIngotList) {
 			for (const lastTableIngot of lastTableIngotList) {
 				if (currentTableIngot.id === lastTableIngot.id) {
-					const columnsWhoseNameHasChanged = currentTableIngot.columns.reduce(
-						(acc: any[], currentColumn) => {
-							const lastColumn = lastTableIngot.columns
-								.find(lastColumn => lastColumn.id === currentColumn.id);
+					const columnsWhoseNameHasChanged = this._getColumnsWhoseNameHasChanged(
+						currentTableIngot.columns,
+						lastTableIngot.columns
+					);
 
-							if (lastColumn && currentColumn.name !== lastColumn.name) {
-								acc.push({
-									...currentColumn,
-									futureColumnName: currentColumn.name,
-									columnName: lastColumn.name
-								});
-							}
-							return acc;
-						}, []);
+					const computedColumnsWhoseNameHasChanged = this._getColumnsWhoseNameHasChanged(
+						currentTableIngot.computedColumns,
+						lastTableIngot.computedColumns
+					);
 
-					for (const { columnName, futureColumnName } of columnsWhoseNameHasChanged) {
+					for (const {
+						columnName,
+						futureColumnName
+					} of [...columnsWhoseNameHasChanged, ...computedColumnsWhoseNameHasChanged]) {
 						queryWithHandledRenameOfColumn += await this._databaseManager.tableManipulation
 							.alterTable(currentTableIngot.name, true)
 							.renameColumn(
@@ -48,4 +47,22 @@ export abstract class RenameOfColumnOperationTemplate {
 
 		return queryWithHandledRenameOfColumn;
 	}
+
+	private _getColumnsWhoseNameHasChanged(
+		currentColumns: (ColumnInterface | ComputedColumnInterface)[],
+		lastColumns: (ColumnInterface | ComputedColumnInterface)[]
+	): ColumnChangeInfo[] {
+		return currentColumns.reduce((acc: ColumnChangeInfo[], currentColumn) => {
+			const lastColumn = lastColumns.find(lastColumn => lastColumn.id === currentColumn.id);
+
+			if (lastColumn && currentColumn.name !== lastColumn.name) {
+				acc.push({
+					...currentColumn,
+					futureColumnName: currentColumn.name,
+					columnName: lastColumn.name
+				});
+			}
+			return acc;
+		}, []);
+	};
 }

@@ -61,7 +61,6 @@ export class MigrationManager implements MigrationManagerInterface {
 
 		await this._runMigration(filePath, migrationClassName);
 		await this._updateMigrationStatus(migrationName, true);
-
 	}
 
 	async migrate(migrationName: string) {
@@ -253,19 +252,21 @@ export class MigrationManager implements MigrationManagerInterface {
 					.dropTable({ type: 'CASCADE' }) + '\n\t\t\t\t';
 			}
 
-			return { migrationQuery, undoMigrationQuery }
+			return { migrationQuery, undoMigrationQuery };
 		}
 
 		const currentCompressedTables: CompressedTableIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
 			id: table?.id,
 			name: table.name,
-			columns: table.columns
+			columns: table.columns,
+			computedColumns: table.computedColumns
 		}));
 
 		const lastCompressedTables: CompressedTableIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
 			id: table?.id,
 			name: table.name,
-			columns: table.columns
+			columns: table.columns,
+			computedColumns: table.computedColumns
 		}));
 
 		const invoker = new MigrationInvoker();
