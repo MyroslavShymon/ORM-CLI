@@ -54,6 +54,10 @@ export class CLI {
 		if (commanderOptions['migration:up']) {
 			this._migrationManager.migrationUp(commanderOptions['migration:up']);
 		}
+
+		if (commanderOptions['migration:down']) {
+			this._migrationManager.migrationDown(commanderOptions['migration:down']);
+		}
 	}
 
 	private _initializeConnectionData(): ConnectionData {

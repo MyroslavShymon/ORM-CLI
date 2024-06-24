@@ -14,6 +14,7 @@ commander
 	.option('-i, --init', 'Init ORM')
 	.option('-mc, --migration:create [char]', 'Create migration')
 	.option('-mup, --migration:up <char>', 'Migration up')
+	.option('-mud, --migration:down <char>', 'Migration down')
 	.parse(process.argv);
 
 const options = commander.opts();

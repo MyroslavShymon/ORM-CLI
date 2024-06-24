@@ -54,13 +54,21 @@ export class MigrationManager implements MigrationManagerInterface {
 		this._databaseManager = databaseManager;
 	}
 
+	async migrationDown(migrationName: string): Promise<void> {
+		await this._migrationDownOrUp(migrationName, 'down');
+	}
+
 	async migrationUp(migrationName: string): Promise<void> {
+		await this._migrationDownOrUp(migrationName, 'up');
+	}
+
+	private async _migrationDownOrUp(migrationName: string, direction: 'up' | 'down'): Promise<void> {
 		await this._prepareMigration();
 		const filePath = path.resolve(this._projectRoot, `migrations`, migrationName);
 		const migrationClassName = this._extractMigrationClassName(migrationName);
 
-		await this._runMigration(filePath, migrationClassName);
-		await this._updateMigrationStatus(migrationName, true);
+		await this._runMigration(filePath, migrationClassName, direction);
+		await this._updateMigrationStatus(migrationName, direction === 'up');
 	}
 
 	async migrate(migrationName: string) {
@@ -68,13 +76,13 @@ export class MigrationManager implements MigrationManagerInterface {
 		const migrationPath = path.resolve(this._projectRoot, `migrations`);
 		const migrationFiles = fs.readdirSync(migrationPath).filter(file => file.endsWith('.migration.ts'));
 
-		for (const file of migrationFiles) {
-			const filePath = path.join(migrationPath, file);
-			const migrationClassName = this._extractMigrationClassName(migrationName);
-
-			await this._runMigration(filePath, migrationClassName);
-			await this._updateMigrationStatus(migrationName, true);
-		}
+		// for (const file of migrationFiles) {
+		// 	const filePath = path.join(migrationPath, file);
+		// 	const migrationClassName = this._extractMigrationClassName(migrationName);
+		//
+		// 	await this._runMigration(filePath, migrationClassName);
+		// 	await this._updateMigrationStatus(migrationName, true);
+		// }
 	}
 
 	private async _prepareMigration(): Promise<void> {
@@ -92,13 +100,20 @@ export class MigrationManager implements MigrationManagerInterface {
 		);
 	}
 
-	private async _runMigration(filePath: string, migrationClassName: string) {
+	private async _runMigration(filePath: string, migrationClassName: string, direction: 'up' | 'down') {
 		tsNode.register();
 		const module = require(filePath);
 		const MigrationClass = module[migrationClassName];
 
 		const migrationClass = new MigrationClass();
-		await migrationClass.up(this._databaseManager);
+
+		if (direction === 'up') {
+			await migrationClass.up(this._databaseManager);
+		} else if (direction === 'down') {
+			await migrationClass.down(this._databaseManager);
+		} else {
+			throw new Error(`Invalid migration direction: ${direction}. Must be 'up' or 'down'.`);
+		}
 	}
 
 	private async _updateMigrationStatus(migrationName: string, isUp: boolean): Promise<void> {
@@ -310,15 +325,16 @@ export class MigrationManager implements MigrationManagerInterface {
 		migrationName = convertToCamelCase(migrationName.split('_').slice(1).join(''));
 
 		const migrationContent = `import {DatabaseManagerInterface, MigrationInterface} from "@myroslavshymon/orm/orm/core";
+import {DatabasesTypes} from "@myroslavshymon/orm";
 
 export class ${migrationName} implements MigrationInterface {
-    async up(databaseManager: DatabaseManagerInterface): Promise<void> {
+    async up(databaseManager: DatabaseManagerInterface<DatabasesTypes.POSTGRES>): Promise<void> {
         await databaseManager.query(
             \`${migrationQuery}\`
         );
     }
 
-   async down(databaseManager: DatabaseManagerInterface): Promise<void> {
+   async down(databaseManager: DatabaseManagerInterface<DatabasesTypes.POSTGRES>): Promise<void> {
        await databaseManager.query(
              \`${undoMigrationQuery}\`
        );

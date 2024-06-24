@@ -102,10 +102,10 @@ export abstract class ColumnOperationsTemplate {
 			currentColumn => !lastTableIngot.computedColumns.some(lastColumn => lastColumn.id === currentColumn.id)
 		);
 
-		for (const { name, dataType, calculate, stored } of addedComputedColumns) {
+		for (const { name, dataType, calculate } of addedComputedColumns) {
 			addedColumnsQuery += await this._databaseManager.tableManipulation
 				.alterTable(name, true)
-				.addComputedColumn({ stored, dataType, calculate }) + '\n\t\t\t\t';
+				.addComputedColumn({ dataType, calculate }) + '\n\t\t\t\t';
 		}
 
 		return addedColumnsQuery;
