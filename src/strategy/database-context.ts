@@ -80,7 +80,7 @@ export class DatabaseContext implements DatabaseContextInterface {
 		}
 	}
 
-	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string }[]> {
+	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string, is_up: boolean }[]> {
 		try {
 			return this.databaseStrategy.getMigrationByName(options);
 		} catch (error) {

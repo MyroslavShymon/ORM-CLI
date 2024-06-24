@@ -15,6 +15,8 @@ commander
 	.option('-mc, --migration:create [char]', 'Create migration')
 	.option('-mup, --migration:up <char>', 'Migration up')
 	.option('-mud, --migration:down <char>', 'Migration down')
+	.option('-mu, --migrate:up', 'All migrations up')
+	.option('-md, --migrate:down', 'All migrations down')
 	.parse(process.argv);
 
 const options = commander.opts();

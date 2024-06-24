@@ -114,8 +114,8 @@ export class PostgreSqlStrategy implements DatabaseStrategy {
 								 migrationName,
 								 migrationTable,
 								 migrationTableSchema
-							 }: GetMigrationByNameInterface): Promise<{ name: string }[]> {
-		const getMigrationByNameQuery = `SELECT name FROM ${migrationTableSchema}.${migrationTable} WHERE name LIKE '%${migrationName}'`;
+							 }: GetMigrationByNameInterface): Promise<{ name: string, is_up: boolean }[]> {
+		const getMigrationByNameQuery = `SELECT name, is_up FROM ${migrationTableSchema}.${migrationTable} WHERE name LIKE '%${migrationName}'`;
 		const migrations = await this.client.query(getMigrationByNameQuery);
 		return migrations.rows;
 	}

@@ -26,7 +26,7 @@ export interface DatabaseStrategy {
 
 	updateMigrationIngot(options: UpdateMigrationIngotInterface): Promise<void>;
 
-	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string }[]>;
+	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string, is_up: boolean }[]>;
 
 	query(sql: string): Promise<any>;
 }

@@ -6,7 +6,8 @@ import {
 	ConnectionData,
 	convertToCamelCase,
 	createDirectoryIfNotExists,
-	MigrationManagerInterface
+	MigrationManagerInterface,
+	MigrationsType
 } from '../../common';
 import { DatabaseContextInterface } from '../../strategy';
 import { DatabasesTypes } from '@myroslavshymon/orm';
@@ -55,34 +56,50 @@ export class MigrationManager implements MigrationManagerInterface {
 	}
 
 	async migrationDown(migrationName: string): Promise<void> {
-		await this._migrationDownOrUp(migrationName, 'down');
+		await this._migrateDownOrUp(migrationName, 'down');
 	}
 
 	async migrationUp(migrationName: string): Promise<void> {
-		await this._migrationDownOrUp(migrationName, 'up');
+		await this._migrateDownOrUp(migrationName, 'up');
 	}
 
-	private async _migrationDownOrUp(migrationName: string, direction: 'up' | 'down'): Promise<void> {
+	async migrate(direction: MigrationsType): Promise<void> {
+		const migrationPath = path.resolve(this._projectRoot, `migrations`);
+		const migrationFiles = fs.readdirSync(migrationPath).filter(file => file.endsWith('.migration.ts'));
+
+		for (const migrationName of migrationFiles) {
+			await this._migrateDownOrUp(migrationName, direction);
+		}
+	}
+
+	private async _migrateDownOrUp(migrationName: string, direction: MigrationsType): Promise<void> {
 		await this._prepareMigration();
 		const filePath = path.resolve(this._projectRoot, `migrations`, migrationName);
 		const migrationClassName = this._extractMigrationClassName(migrationName);
 
-		await this._runMigration(filePath, migrationClassName, direction);
-		await this._updateMigrationStatus(migrationName, direction === 'up');
-	}
+		const migration = await this._databaseContext.getMigrationByName({
+			migrationName: migrationName.split('.migration.ts')[0],
+			migrationTable: this._connectionData.migrationTable,
+			migrationTableSchema: this._connectionData.migrationTableSchema
+		});
 
-	async migrate(migrationName: string) {
-		await this._prepareMigration();
-		const migrationPath = path.resolve(this._projectRoot, `migrations`);
-		const migrationFiles = fs.readdirSync(migrationPath).filter(file => file.endsWith('.migration.ts'));
+		if (migration[0].is_up && direction === 'up') {
+			console.error('Migration is already upped');
+			return;
+		}
 
-		// for (const file of migrationFiles) {
-		// 	const filePath = path.join(migrationPath, file);
-		// 	const migrationClassName = this._extractMigrationClassName(migrationName);
-		//
-		// 	await this._runMigration(filePath, migrationClassName);
-		// 	await this._updateMigrationStatus(migrationName, true);
-		// }
+		if (!migration[0].is_up && direction === 'down') {
+			console.error('Migration is already downed');
+			return;
+		}
+
+		if (
+			(!migration[0].is_up && direction === 'up') ||
+			(migration[0].is_up && direction === 'down')
+		) {
+			await this._runMigration(filePath, migrationClassName, direction);
+			await this._updateMigrationStatus(migrationName, direction === 'up');
+		}
 	}
 
 	private async _prepareMigration(): Promise<void> {
@@ -100,7 +117,7 @@ export class MigrationManager implements MigrationManagerInterface {
 		);
 	}
 
-	private async _runMigration(filePath: string, migrationClassName: string, direction: 'up' | 'down') {
+	private async _runMigration(filePath: string, migrationClassName: string, direction: MigrationsType) {
 		tsNode.register();
 		const module = require(filePath);
 		const MigrationClass = module[migrationClassName];
