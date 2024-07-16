@@ -1,10 +1,11 @@
 import { ChangeNotNullOfColumnOperation } from '../operations';
 import { MigrationCommandInterface } from '../interfaces';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class ChangeNotNullCommand implements MigrationCommandInterface {
-	private operation: ChangeNotNullOfColumnOperation;
+export class ChangeNotNullCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: ChangeNotNullOfColumnOperation<DT>;
 
-	constructor(operation: ChangeNotNullOfColumnOperation) {
+	constructor(operation: ChangeNotNullOfColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

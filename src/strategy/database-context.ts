@@ -9,11 +9,12 @@ import {
 	UpdateMigrationStatusInterface
 } from '../common';
 import { DatabaseContextInterface, DatabaseStrategy } from './interfaces';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class DatabaseContext implements DatabaseContextInterface {
-	private databaseStrategy: DatabaseStrategy;
+export class DatabaseContext<DT extends DatabasesTypes> implements DatabaseContextInterface<DT> {
+	private databaseStrategy: DatabaseStrategy<DT>;
 
-	constructor(strategy: DatabaseStrategy) {
+	constructor(strategy: DatabaseStrategy<DT>) {
 		this.databaseStrategy = strategy;
 	}
 
@@ -26,7 +27,7 @@ export class DatabaseContext implements DatabaseContextInterface {
 		}
 	}
 
-	async createMigration(options: AddMigrationInterface): Promise<void> {
+	async createMigration(options: AddMigrationInterface<DT>): Promise<void> {
 		try {
 			await this.databaseStrategy.createMigration(options);
 		} catch (error) {
@@ -35,7 +36,7 @@ export class DatabaseContext implements DatabaseContextInterface {
 		}
 	}
 
-	async getCurrentDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface> {
+	async getCurrentDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface<DT>> {
 		try {
 			return this.databaseStrategy.getCurrentDatabaseIngot(options);
 		} catch (error) {
@@ -44,7 +45,7 @@ export class DatabaseContext implements DatabaseContextInterface {
 		}
 	}
 
-	async getLastDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface> {
+	async getLastDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface<DT>> {
 		try {
 			return this.databaseStrategy.getLastDatabaseIngot(options);
 		} catch (error) {
@@ -62,7 +63,7 @@ export class DatabaseContext implements DatabaseContextInterface {
 		}
 	}
 
-	async updateMigrationIngot(options: UpdateMigrationIngotInterface): Promise<void> {
+	async updateMigrationIngot(options: UpdateMigrationIngotInterface<DT>): Promise<void> {
 		try {
 			return this.databaseStrategy.updateMigrationIngot(options);
 		} catch (error) {

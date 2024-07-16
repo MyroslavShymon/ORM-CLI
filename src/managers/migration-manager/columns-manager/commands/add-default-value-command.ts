@@ -1,10 +1,11 @@
 import { MigrationCommandInterface } from '../interfaces';
 import { AddDefaultValueToColumnOperation } from '../operations';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class AddDefaultValueCommand implements MigrationCommandInterface {
-	private operation: AddDefaultValueToColumnOperation;
+export class AddDefaultValueCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: AddDefaultValueToColumnOperation<DT>;
 
-	constructor(operation: AddDefaultValueToColumnOperation) {
+	constructor(operation: AddDefaultValueToColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

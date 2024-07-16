@@ -1,10 +1,11 @@
 import { MigrationCommandInterface } from '../interfaces';
 import { ChangeDataTypeOfColumnOperation } from '../operations';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class ChangeDataTypeCommand implements MigrationCommandInterface {
-	private operation: ChangeDataTypeOfColumnOperation;
+export class ChangeDataTypeCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: ChangeDataTypeOfColumnOperation<DT>;
 
-	constructor(operation: ChangeDataTypeOfColumnOperation) {
+	constructor(operation: ChangeDataTypeOfColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

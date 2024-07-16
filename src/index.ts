@@ -3,6 +3,7 @@
 import * as figlet from 'figlet';
 import { Command } from 'commander';
 import { CLI } from './cli';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
 const commander = new Command();
 
@@ -20,4 +21,18 @@ commander
 	.parse(process.argv);
 
 const options = commander.opts();
-new CLI(options);
+
+const databaseType = process.env.DB_TYPE === DatabasesTypes.MYSQL
+	? DatabasesTypes.MYSQL
+	: DatabasesTypes.POSTGRES;
+
+switch (databaseType) {
+	case DatabasesTypes.MYSQL:
+		new CLI<DatabasesTypes.MYSQL>(options);
+		break;
+	case DatabasesTypes.POSTGRES:
+		new CLI<DatabasesTypes.POSTGRES>(options);
+		break;
+	default:
+		new CLI<DatabasesTypes.POSTGRES>(options);
+}

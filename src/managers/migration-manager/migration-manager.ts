@@ -12,7 +12,7 @@ import {
 import { DatabaseContextInterface } from '../../strategy';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CommandClass, CompressedTableIngotInterface, MigrationQueriesInterface, OperationClass } from '../common';
-import { DatabaseIngotInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseIngotInterface, DatabaseManagerInterface, DropTableInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddColumnCommand,
 	AddColumnOperation,
@@ -39,19 +39,22 @@ import {
 import { TableManager } from './tables-manager';
 import { ForeignKeysManager } from './foreign-keys-manager';
 
-export class MigrationManager implements MigrationManagerInterface {
+export class MigrationManager<DT extends DatabasesTypes> implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
 	_connectionData: ConnectionData;
-	_databaseContext: DatabaseContextInterface;
-	_databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+	_databaseContext: DatabaseContextInterface<DT>;
+	_databaseManager: DatabaseManagerInterface<DT>;
+	_databaseType: DatabasesTypes;
 
 	constructor(
-		databaseContext: DatabaseContextInterface,
+		databaseContext: DatabaseContextInterface<DT>,
 		connectionData: ConnectionData,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>,
+		databaseType: DatabasesTypes
 	) {
 		this._connectionData = connectionData;
 		this._databaseContext = databaseContext;
+		this._databaseType = databaseType;
 		this._databaseManager = databaseManager;
 	}
 
@@ -243,12 +246,12 @@ export class MigrationManager implements MigrationManagerInterface {
 			tableName: this._connectionData.migrationTable,
 			schema: this._connectionData.migrationTableSchema
 		});
-		let currentDatabaseIngot: DatabaseIngotInterface = await this._databaseContext.getCurrentDatabaseIngot({
+		let currentDatabaseIngot: DatabaseIngotInterface<DT> = await this._databaseContext.getCurrentDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
 
-		const lastDatabaseIngot: DatabaseIngotInterface = await this._databaseContext.getLastDatabaseIngot({
+		const lastDatabaseIngot: DatabaseIngotInterface<DT> = await this._databaseContext.getLastDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema
 		});
@@ -266,11 +269,10 @@ export class MigrationManager implements MigrationManagerInterface {
 		return;
 	}
 
-
-	//TODO не заюуваємо шо в нас ще будуть трігери процедури і так далі
+	//TODO не забуваємо шо в нас ще будуть трігери процедури і так далі
 	private async _createMigrationQuery(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
 		isMigrationsExist: boolean
 	): Promise<MigrationQueriesInterface> {
 		let migrationQuery = '';
@@ -279,22 +281,31 @@ export class MigrationManager implements MigrationManagerInterface {
 			migrationQuery += this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
 
 			for (const table of currentDatabaseIngot.tables) {
+				let dropTableOptions: DropTableInterface<DT>;
+
+				if (this._databaseType === DatabasesTypes.POSTGRES) {
+					dropTableOptions = { type: 'CASCADE' } as DropTableInterface<DT>;
+				} else if (this._databaseType === DatabasesTypes.MYSQL) {
+					dropTableOptions = {} as DropTableInterface<DT>;
+				} else {
+					throw new Error(`Unsupported database type: ${this._databaseType}`);
+				}
+
 				undoMigrationQuery += await this._databaseManager.tableManipulation
 					.alterTable(table.name, true)
-					.dropTable({ type: 'CASCADE' }) + '\n\t\t\t\t';
+					.dropTable(dropTableOptions) + '\n\t\t\t\t';
 			}
-
 			return { migrationQuery, undoMigrationQuery };
 		}
 
-		const currentCompressedTables: CompressedTableIngotInterface[] = currentDatabaseIngot.tables.map(table => ({
+		const currentCompressedTables: CompressedTableIngotInterface<DT>[] = currentDatabaseIngot.tables.map(table => ({
 			id: table?.id,
 			name: table.name,
 			columns: table.columns,
 			computedColumns: table.computedColumns
 		}));
 
-		const lastCompressedTables: CompressedTableIngotInterface[] = lastDatabaseIngot.tables.map(table => ({
+		const lastCompressedTables: CompressedTableIngotInterface<DT>[] = lastDatabaseIngot.tables.map(table => ({
 			id: table?.id,
 			name: table.name,
 			columns: table.columns,
@@ -304,28 +315,28 @@ export class MigrationManager implements MigrationManagerInterface {
 		const invoker = new MigrationInvoker();
 
 		const executeOperation = async <O extends OperationInterface, C extends MigrationCommandInterface>
-		(operationClass: OperationClass<O>, commandClass: CommandClass<O, C>) => {
+		(operationClass: OperationClass<O, DT>, commandClass: CommandClass<O, C>) => {
 			const operation = new operationClass(this._databaseManager, currentCompressedTables, lastCompressedTables);
 			const command = new commandClass(operation);
 			migrationQuery += await invoker.executeCommand(command);
 			undoMigrationQuery += await invoker.undoCommand();
 		};
 
-		await executeOperation<AddColumnOperation, AddColumnCommand>(AddColumnOperation, AddColumnCommand);
-		await executeOperation<DeleteColumnOperation, DeleteColumnCommand>(DeleteColumnOperation, DeleteColumnCommand);
-		await executeOperation<AddDefaultValueToColumnOperation, AddDefaultValueCommand>(AddDefaultValueToColumnOperation, AddDefaultValueCommand);
-		await executeOperation<DeleteDefaultValueFromColumnOperation, DeleteDefaultValueCommand>(DeleteDefaultValueFromColumnOperation, DeleteDefaultValueCommand);
-		await executeOperation<ChangeDataTypeOfColumnOperation, ChangeDataTypeCommand>(ChangeDataTypeOfColumnOperation, ChangeDataTypeCommand);
-		await executeOperation<ChangeNotNullOfColumnOperation, ChangeNotNullCommand>(ChangeNotNullOfColumnOperation, ChangeNotNullCommand);
-		await executeOperation<ChangeUniqueValueOfColumnOperation, ChangeUniqueCommand>(ChangeUniqueValueOfColumnOperation, ChangeUniqueCommand);
-		await executeOperation<ChangeCheckConstraintOfColumnOperation, ChangeCheckConstraintCommand>(ChangeCheckConstraintOfColumnOperation, ChangeCheckConstraintCommand);
-		await executeOperation<RenameOfColumnOperation, RenameColumnCommand>(RenameOfColumnOperation, RenameColumnCommand);
+		await executeOperation<AddColumnOperation<DT>, AddColumnCommand<DT>>(AddColumnOperation, AddColumnCommand);
+		await executeOperation<DeleteColumnOperation<DT>, DeleteColumnCommand<DT>>(DeleteColumnOperation, DeleteColumnCommand);
+		await executeOperation<AddDefaultValueToColumnOperation<DT>, AddDefaultValueCommand<DT>>(AddDefaultValueToColumnOperation, AddDefaultValueCommand);
+		await executeOperation<DeleteDefaultValueFromColumnOperation<DT>, DeleteDefaultValueCommand<DT>>(DeleteDefaultValueFromColumnOperation, DeleteDefaultValueCommand);
+		await executeOperation<ChangeDataTypeOfColumnOperation<DT>, ChangeDataTypeCommand<DT>>(ChangeDataTypeOfColumnOperation, ChangeDataTypeCommand);
+		await executeOperation<ChangeNotNullOfColumnOperation<DT>, ChangeNotNullCommand<DT>>(ChangeNotNullOfColumnOperation, ChangeNotNullCommand);
+		await executeOperation<ChangeUniqueValueOfColumnOperation<DT>, ChangeUniqueCommand<DT>>(ChangeUniqueValueOfColumnOperation, ChangeUniqueCommand);
+		await executeOperation<ChangeCheckConstraintOfColumnOperation<DT>, ChangeCheckConstraintCommand<DT>>(ChangeCheckConstraintOfColumnOperation, ChangeCheckConstraintCommand);
+		await executeOperation<RenameOfColumnOperation<DT>, RenameColumnCommand<DT>>(RenameOfColumnOperation, RenameColumnCommand);
 
-		const [foreignKeysMigrationQuery, foreignKeysUndoMigrationQuery] = await ForeignKeysManager.manage(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager);
+		const [foreignKeysMigrationQuery, foreignKeysUndoMigrationQuery] = await ForeignKeysManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
 		migrationQuery += foreignKeysMigrationQuery;
 		undoMigrationQuery += foreignKeysUndoMigrationQuery;
 
-		const [tableMigrationQuery, tableUndoMigrationQuery] = await TableManager.manage(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager);
+		const [tableMigrationQuery, tableUndoMigrationQuery] = await TableManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
 		migrationQuery += tableMigrationQuery;
 		undoMigrationQuery += tableUndoMigrationQuery;
 
@@ -345,13 +356,13 @@ export class MigrationManager implements MigrationManagerInterface {
 import {DatabasesTypes} from "@myroslavshymon/orm";
 
 export class ${migrationName} implements MigrationInterface {
-    async up(databaseManager: DatabaseManagerInterface<DatabasesTypes.POSTGRES>): Promise<void> {
+    async up(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<void> {
         await databaseManager.query(
             \`${migrationQuery}\`
         );
     }
 
-   async down(databaseManager: DatabaseManagerInterface<DatabasesTypes.POSTGRES>): Promise<void> {
+   async down(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<void> {
        await databaseManager.query(
              \`${undoMigrationQuery}\`
        );

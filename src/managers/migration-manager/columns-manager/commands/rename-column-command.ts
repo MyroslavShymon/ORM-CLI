@@ -1,10 +1,11 @@
 import { MigrationCommandInterface } from '../interfaces';
 import { RenameOfColumnOperation } from '../operations';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class RenameColumnCommand implements MigrationCommandInterface {
-	private operation: RenameOfColumnOperation;
+export class RenameColumnCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: RenameOfColumnOperation<DT>;
 
-	constructor(operation: RenameOfColumnOperation) {
+	constructor(operation: RenameOfColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

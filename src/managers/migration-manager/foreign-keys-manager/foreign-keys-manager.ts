@@ -1,36 +1,35 @@
 import { DatabaseIngotInterface, DatabaseManagerInterface, ManyToManyInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { TableIngotInterface } from '@myroslavshymon/orm/orm/core/interfaces/table-ingot.interface';
-import { DataSourceInterface } from '@myroslavshymon/orm/orm/core/interfaces/data-source.interface';
 import {
 	MatchedManyToManyRelationsInterface,
 	OneToManyRelationsOfDatabaseIngotInterface,
 	OneToOneRelationsOfDatabaseIngotInterface
 } from '../../common';
-import { DataSourcePostgres } from '@myroslavshymon/orm/orm/strategies/postgres';
 
 export class ForeignKeysManager {
-	public static async manage(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	public static async manage<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>,
+		databaseType: DatabasesTypes
 	): Promise<[string, string]> {
 		let migrationQuery = '';
 		let undoMigrationQuery = '';
 
-		migrationQuery += await this._handleManyToManyRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
-		undoMigrationQuery += await this._handleManyToManyRelationsOfTable(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+		migrationQuery += await this._handleManyToManyRelationsOfTable<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager, databaseType);
+		undoMigrationQuery += await this._handleManyToManyRelationsOfTable<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager, databaseType);
 
-		migrationQuery += await this._handleOneToManyRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
-		undoMigrationQuery += await this._handleOneToManyRelationsOfTable(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+		migrationQuery += await this._handleOneToManyRelationsOfTable<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
+		undoMigrationQuery += await this._handleOneToManyRelationsOfTable<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
 
-		migrationQuery += await this._handleOneToOneRelationsOfTable(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
-		undoMigrationQuery += await this._handleOneToOneRelationsOfTable(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+		migrationQuery += await this._handleOneToOneRelationsOfTable<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
+		undoMigrationQuery += await this._handleOneToOneRelationsOfTable<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
 
 		return [migrationQuery, undoMigrationQuery];
 	}
 
-	private static _validateManyToManyRelations(tables: TableIngotInterface<DataSourceInterface>[]): void {
+	private static _validateManyToManyRelations<DT extends DatabasesTypes>(tables: TableIngotInterface<DT>[]): void {
 		const manyToManyRelations = tables.flatMap(table => table.manyToMany);
 
 		const findUnmatchedRelations = (relations: ManyToManyInterface[]): ManyToManyInterface[] => {
@@ -49,7 +48,7 @@ export class ForeignKeysManager {
 		}
 	};
 
-	private static _getManyToManyMatches(tables: TableIngotInterface<DataSourceInterface>[]): MatchedManyToManyRelationsInterface[] {
+	private static _getManyToManyMatches<DT extends DatabasesTypes>(tables: TableIngotInterface<DT>[]): MatchedManyToManyRelationsInterface[] {
 		const manyToManyRelations = tables.flatMap(table => table.manyToMany);
 
 		const matchedRelations = manyToManyRelations.filter(relation =>
@@ -77,10 +76,11 @@ export class ForeignKeysManager {
 		return newRelations;
 	};
 
-	private static async _handleManyToManyRelationsOfTable(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	private static async _handleManyToManyRelationsOfTable<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>,
+		databaseType: DatabasesTypes
 	): Promise<string> {
 		let queryWithHandledManyToManyRelation = '';
 
@@ -103,7 +103,7 @@ export class ForeignKeysManager {
 		for (const tableName of tableNamesOfRemovedRelations) {
 			queryWithHandledManyToManyRelation += await databaseManager.tableManipulation
 				.alterTable(tableName, true)
-				.dropTable({ type: 'CASCADE' }) + '\n\t\t\t\t';
+				.dropTable({ type: 'CASCADE' } as any) + '\n\t\t\t\t';
 		}
 
 		const groupedRelations: { [key: string]: ManyToManyInterface[] } = {};
@@ -115,12 +115,12 @@ export class ForeignKeysManager {
 			groupedRelations[relation.futureTableName].push(relation);
 		}
 
-		const tableIngots: TableIngotInterface<DataSourcePostgres>[] = Object.keys(groupedRelations).map(futureTableName => {
+		const tableIngots: TableIngotInterface<DatabasesTypes>[] = Object.keys(groupedRelations).map(futureTableName => {
 			const relations = groupedRelations[futureTableName];
 			return {
 				name: futureTableName,
 				options: { primaryKeys: relations.map(relation => relation.foreignKey) },
-				columns: relations.map(relation => ({ name: relation.foreignKey, options: { dataType: 'INT' } })),
+				columns: relations.map(relation => ({ name: relation.foreignKey, options: { dataType: 'NUMERIC' } })),
 				computedColumns: [],
 				foreignKeys: relations.map(relation => ({
 					key: relation.referencedColumn,
@@ -135,13 +135,13 @@ export class ForeignKeysManager {
 		});
 
 		for (const tableIngot of tableIngots) {
-			queryWithHandledManyToManyRelation += databaseManager.tableCreator.generateCreateTableQuery([tableIngot]) + '\n\t\t\t\t';
+			queryWithHandledManyToManyRelation += databaseManager.tableCreator.generateCreateTableQuery([tableIngot as TableIngotInterface<DT>]) + '\n\t\t\t\t';
 		}
 
 		return queryWithHandledManyToManyRelation;
 	}
 
-	private static _checkOneToManyRelations(databaseIngot: DatabaseIngotInterface): void {
+	private static _checkOneToManyRelations<DT extends DatabasesTypes>(databaseIngot: DatabaseIngotInterface<DT>): void {
 		const { tables } = databaseIngot;
 
 		tables.forEach(table => {
@@ -163,10 +163,10 @@ export class ForeignKeysManager {
 		});
 	}
 
-	private static async _handleOneToManyRelationsOfTable(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	private static async _handleOneToManyRelationsOfTable<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>
 	): Promise<string> {
 		let queryWithHandledOneToManyRelation = '';
 		this._checkOneToManyRelations(currentDatabaseIngot);
@@ -220,7 +220,7 @@ export class ForeignKeysManager {
 		return queryWithHandledOneToManyRelation;
 	}
 
-	private static _checkOneToOneRelations(databaseIngot: DatabaseIngotInterface): void {
+	private static _checkOneToOneRelations<DT extends DatabasesTypes>(databaseIngot: DatabaseIngotInterface<DT>): void {
 		const { tables } = databaseIngot;
 
 		tables.forEach(table => {
@@ -242,10 +242,10 @@ export class ForeignKeysManager {
 		});
 	}
 
-	private static async _handleOneToOneRelationsOfTable(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	private static async _handleOneToOneRelationsOfTable<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>
 	): Promise<string> {
 		let queryWithHandledOneToOneRelation = '';
 		this._checkOneToOneRelations(currentDatabaseIngot);

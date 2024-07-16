@@ -10,8 +10,9 @@ import {
 	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
 } from '../common';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class MySqlStrategy implements DatabaseStrategy {
+export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 	client!: Connection;
 
 	async connect(dataToConnect: ConnectionData): Promise<void> {
@@ -24,10 +25,10 @@ export class MySqlStrategy implements DatabaseStrategy {
 							  migrationName,
 							  migrationTable = 'migrations',
 							  migrationTableSchema = 'public'
-						  }: AddMigrationInterface
+						  }: AddMigrationInterface<DatabasesTypes.MYSQL>
 	): Promise<void> {
 		const addMigrationQuery = `INSERT INTO ${migrationTableSchema}.${migrationTable} (name, ingot)
-    								VALUES ('${migrationName}', '${JSON.stringify(databaseIngot)}');`;
+                                   VALUES ('${migrationName}', '${JSON.stringify(databaseIngot)}');`;
 
 		await this.client.query(addMigrationQuery);
 		console.log(`Migration is add successfully`);
@@ -37,8 +38,10 @@ export class MySqlStrategy implements DatabaseStrategy {
 									  migrationTable,
 									  migrationTableSchema
 								  }: GetMigrationTableInterface
-	): Promise<DatabaseIngotInterface> {
-		const getCurrentDatabaseIngotQuery = `SELECT * FROM ${migrationTableSchema}.${migrationTable} WHERE name = 'current_database_ingot';`;
+	): Promise<DatabaseIngotInterface<DatabasesTypes.MYSQL>> {
+		const getCurrentDatabaseIngotQuery = `SELECT *
+                                              FROM ${migrationTableSchema}.${migrationTable}
+                                              WHERE name = 'current_database_ingot';`;
 		const response = await this.client.query(getCurrentDatabaseIngotQuery);
 		//TODO зробити для mysql
 		// const currentDatabaseIngot: DatabaseIngotInterface = response.sql[0].ingot;
@@ -53,8 +56,10 @@ export class MySqlStrategy implements DatabaseStrategy {
 			migrationTableSchema,
 			migrationTable
 		}: GetMigrationTableInterface
-	): Promise<DatabaseIngotInterface> {
-		const getLastDatabaseIngotQuery = `SELECT * FROM ${migrationTableSchema}.${migrationTable} ORDER BY id DESC LIMIT 1;`;
+	): Promise<DatabaseIngotInterface<DatabasesTypes.MYSQL>> {
+		const getLastDatabaseIngotQuery = `SELECT *
+                                           FROM ${migrationTableSchema}.${migrationTable}
+                                           ORDER BY id DESC LIMIT 1;`;
 		//TODO
 		// const response = await this.client.query(getLastDatabaseIngotQuery);
 		// if (response.rows.length === 0) {
@@ -72,9 +77,9 @@ export class MySqlStrategy implements DatabaseStrategy {
 								}: UpdateMigrationStatusInterface
 	): Promise<void> {
 		const updateMigrationStatusQuery = `
-					UPDATE ${migrationTableSchema}.${migrationTable}
-					SET is_up = ${isUp.toString()}
-					WHERE name = '${migrationName}';
+            UPDATE ${migrationTableSchema}.${migrationTable}
+            SET is_up = ${isUp.toString()}
+            WHERE name = '${migrationName}';
 		`;
 		await this.client.query(updateMigrationStatusQuery);
 		console.log(`Migration status of ${migrationName} is updated to ${isUp}`);
@@ -85,11 +90,11 @@ export class MySqlStrategy implements DatabaseStrategy {
 								   migrationTable,
 								   migrationTableSchema,
 								   migrationName
-							   }: UpdateMigrationIngotInterface): Promise<void> {
+							   }: UpdateMigrationIngotInterface<DatabasesTypes.MYSQL>): Promise<void> {
 		const updateMigrationIngotQuery = `
-					UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
-					SET ingot = '${JSON.stringify(ingot)}'
-					WHERE name = '${migrationName ? migrationName : 'current_database_ingot'}';
+            UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
+            SET ingot = '${JSON.stringify(ingot)}'
+            WHERE name = '${migrationName ? migrationName : 'current_database_ingot'}';
 		`;
 		await this.client.query(updateMigrationIngotQuery);
 		console.log(`Ingot of migration ${migrationName ? migrationName : 'current_database_ingot'} is updated`);

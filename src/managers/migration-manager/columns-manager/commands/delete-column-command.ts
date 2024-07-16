@@ -1,10 +1,11 @@
 import { MigrationCommandInterface } from '../interfaces';
 import { DeleteColumnOperation } from '../operations';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class DeleteColumnCommand implements MigrationCommandInterface {
-	private operation: DeleteColumnOperation;
+export class DeleteColumnCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: DeleteColumnOperation<DT>;
 
-	constructor(operation: DeleteColumnOperation) {
+	constructor(operation: DeleteColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

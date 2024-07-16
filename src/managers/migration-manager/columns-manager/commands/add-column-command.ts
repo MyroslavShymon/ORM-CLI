@@ -1,10 +1,11 @@
 import { MigrationCommandInterface } from '../interfaces';
 import { AddColumnOperation } from '../operations';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class AddColumnCommand implements MigrationCommandInterface {
-	private operation: AddColumnOperation;
+export class AddColumnCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: AddColumnOperation<DT>;
 
-	constructor(operation: AddColumnOperation) {
+	constructor(operation: AddColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

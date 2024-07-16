@@ -3,8 +3,8 @@ import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../interfaces';
 import { OperationInterface } from '../../migration-manager';
 
-export type OperationClass<O extends OperationInterface> = new (
-	databaseManager: DatabaseManagerInterface<DatabasesTypes>,
-	currentCompressedTables: CompressedTableIngotInterface[],
-	lastCompressedTables: CompressedTableIngotInterface[]
+export type OperationClass<O extends OperationInterface, DT extends DatabasesTypes> = new (
+	databaseManager: DatabaseManagerInterface<DT>,
+	currentCompressedTables: CompressedTableIngotInterface<DT>[],
+	lastCompressedTables: CompressedTableIngotInterface<DT>[]
 ) => O;

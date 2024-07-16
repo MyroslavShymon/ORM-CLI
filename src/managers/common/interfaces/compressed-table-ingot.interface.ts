@@ -3,11 +3,12 @@ import {
 	ComputedColumnInterface,
 	PrimaryGeneratedColumnInterface
 } from '@myroslavshymon/orm/orm/core';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export interface CompressedTableIngotInterface {
+export interface CompressedTableIngotInterface<DT extends DatabasesTypes> {
 	id: string | undefined;
 	name: string;
-	columns: ColumnInterface[];
-	computedColumns: ComputedColumnInterface[];
-	primaryColumn?: PrimaryGeneratedColumnInterface;
+	columns: ColumnInterface<DT>[];
+	computedColumns: ComputedColumnInterface<DT>[];
+	primaryColumn?: PrimaryGeneratedColumnInterface<DT>;
 }

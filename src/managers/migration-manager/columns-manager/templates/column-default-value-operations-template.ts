@@ -2,18 +2,18 @@ import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common/interfaces';
 
-export abstract class ColumnDefaultValueOperationsTemplate {
-	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+export abstract class ColumnDefaultValueOperationsTemplate<DT extends DatabasesTypes> {
+	private readonly _databaseManager: DatabaseManagerInterface<DT>;
 
 	protected constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>
 	) {
 		this._databaseManager = databaseManager;
 	}
 
 	protected async _handleColumnDefaultValueDeleting(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let queryWithHandledDeletedDefaultValue = '';
 
@@ -44,8 +44,8 @@ export abstract class ColumnDefaultValueOperationsTemplate {
 	}
 
 	protected async _handleColumnDefaultValueAdding(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let queryWithHandledAddedDefaultValue = '';
 

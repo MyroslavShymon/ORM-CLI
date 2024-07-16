@@ -12,11 +12,11 @@ import {
 } from './strategy';
 import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 
-export class CLI {
+export class CLI<DT extends DatabasesTypes> {
 	private readonly _connectionData: ConnectionData;
 	private readonly _migrationManager: MigrationManagerInterface;
 	private readonly _initManager: InitManagerInterface;
-	private readonly _databaseContext: DatabaseContextInterface;
+	private readonly _databaseContext: DatabaseContextInterface<DT>;
 	private readonly _databaseType: DatabasesTypes;
 	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
 
@@ -41,7 +41,7 @@ export class CLI {
 			}, new DataSourceContext()) as DatabaseManagerInterface<DatabasesTypes.POSTGRES>;
 		}
 
-		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData, this._databaseManager);
+		this._migrationManager = new MigrationManager(this._databaseContext, this._connectionData, this._databaseManager, this._databaseType);
 		this._initManager = new InitManager();
 
 		if (commanderOptions.init) {
@@ -90,16 +90,14 @@ export class CLI {
 		};
 	}
 
-	private _getStrategy(): DatabaseStrategy {
-		const dbType = process.env.DB_TYPE;
-
-		switch (dbType) {
+	private _getStrategy(): DatabaseStrategy<DT> {
+		switch (this._databaseType) {
 			case DatabasesTypes.POSTGRES:
-				return new PostgreSqlStrategy();
+				return new PostgreSqlStrategy() as DatabaseStrategy<DT>;
 			case DatabasesTypes.MYSQL:
-				return new MySqlStrategy();
+				return new MySqlStrategy() as DatabaseStrategy<DT>;
 			default:
-				return new PostgreSqlStrategy(); // Default to PostgreSqlStrategy if dbType is not recognized or not provided
+				return new PostgreSqlStrategy() as DatabaseStrategy<DT>; // Default to PostgreSqlStrategy if dbType is not recognized or not provided
 		}
 	}
 }

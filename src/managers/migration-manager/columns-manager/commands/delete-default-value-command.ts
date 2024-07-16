@@ -1,10 +1,11 @@
 import { MigrationCommandInterface } from '../interfaces';
 import { DeleteDefaultValueFromColumnOperation } from '../operations';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class DeleteDefaultValueCommand implements MigrationCommandInterface {
-	private operation: DeleteDefaultValueFromColumnOperation;
+export class DeleteDefaultValueCommand<DT extends DatabasesTypes> implements MigrationCommandInterface {
+	private operation: DeleteDefaultValueFromColumnOperation<DT>;
 
-	constructor(operation: DeleteDefaultValueFromColumnOperation) {
+	constructor(operation: DeleteDefaultValueFromColumnOperation<DT>) {
 		this.operation = operation;
 	}
 

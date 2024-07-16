@@ -4,14 +4,14 @@ import { CompressedTableIngotInterface } from '../../../common';
 import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export class RenameOfColumnOperation extends RenameOfColumnOperationTemplate implements OperationInterface {
-	private readonly _currentCompressedTables: CompressedTableIngotInterface[];
-	private readonly _lastCompressedTables: CompressedTableIngotInterface[];
+export class RenameOfColumnOperation<DT extends DatabasesTypes> extends RenameOfColumnOperationTemplate<DT> implements OperationInterface {
+	private readonly _currentCompressedTables: CompressedTableIngotInterface<DT>[];
+	private readonly _lastCompressedTables: CompressedTableIngotInterface<DT>[];
 
 	constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>,
-		currentCompressedTables: CompressedTableIngotInterface[],
-		lastCompressedTables: CompressedTableIngotInterface[]
+		databaseManager: DatabaseManagerInterface<DT>,
+		currentCompressedTables: CompressedTableIngotInterface<DT>[],
+		lastCompressedTables: CompressedTableIngotInterface<DT>[]
 	) {
 		super(databaseManager);
 		this._currentCompressedTables = currentCompressedTables;

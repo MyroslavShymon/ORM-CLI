@@ -1,31 +1,32 @@
-import { DatabaseIngotInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseIngotInterface, DatabaseManagerInterface, DropTableInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 
 export class TableManager {
-	public static async manage(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	public static async manage<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>,
+		databaseType: DatabasesTypes
 	): Promise<[string, string]> {
 		let migrationQuery = '';
 		let undoMigrationQuery = '';
 
-		migrationQuery += await this._handleRenameOfTables(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
-		undoMigrationQuery += await this._handleRenameOfTables(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+		migrationQuery += await this._handleRenameOfTables<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
+		undoMigrationQuery += await this._handleRenameOfTables<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
 
-		migrationQuery += await this._handleTableAdding(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
-		undoMigrationQuery += await this._handleTableRemoving(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+		migrationQuery += await this._handleTableAdding<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
+		undoMigrationQuery += await this._handleTableRemoving<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager, databaseType);
 
-		migrationQuery += await this._handleTableRemoving(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
-		undoMigrationQuery += await this._handleTableAdding(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+		migrationQuery += await this._handleTableRemoving<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager, databaseType);
+		undoMigrationQuery += await this._handleTableAdding<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
 
 		return [migrationQuery, undoMigrationQuery];
 	}
 
-	private static async _handleRenameOfTables(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	private static async _handleRenameOfTables<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>
 	): Promise<string> {
 		let queryWithHandledRenamedTables = '';
 
@@ -45,10 +46,10 @@ export class TableManager {
 		return queryWithHandledRenamedTables;
 	}
 
-	private static async _handleTableAdding(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	private static async _handleTableAdding<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>
 	): Promise<string> {
 		const newTables = currentDatabaseIngot.tables.filter(currentTable =>
 			!lastDatabaseIngot.tables
@@ -58,10 +59,11 @@ export class TableManager {
 		return databaseManager.tableCreator.generateCreateTableQuery(newTables);
 	}
 
-	private static async _handleTableRemoving(
-		currentDatabaseIngot: DatabaseIngotInterface,
-		lastDatabaseIngot: DatabaseIngotInterface,
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+	private static async _handleTableRemoving<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>,
+		databaseType: DatabasesTypes
 	): Promise<string> {
 		let queryWithHandledRemovingTables = '';
 
@@ -71,9 +73,19 @@ export class TableManager {
 		);
 
 		for (const deletedTable of removedTables) {
+			let dropTableOptions: DropTableInterface<DT>;
+
+			if (databaseType === DatabasesTypes.POSTGRES) {
+				dropTableOptions = { type: 'CASCADE' } as DropTableInterface<DT>;
+			} else if (databaseType === DatabasesTypes.MYSQL) {
+				dropTableOptions = {} as DropTableInterface<DT>;
+			} else {
+				throw new Error(`Unsupported database type: ${databaseType}`);
+			}
+
 			queryWithHandledRemovingTables += await databaseManager.tableManipulation
 				.alterTable(deletedTable.name, true)
-				.dropTable({ type: 'CASCADE' }) + '\n\t\t\t\t';
+				.dropTable(dropTableOptions) + '\n\t\t\t\t';
 		}
 
 		return queryWithHandledRemovingTables;

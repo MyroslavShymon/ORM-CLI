@@ -3,18 +3,18 @@ import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common';
 import { ColumnChangeInfo } from '../interfaces';
 
-export abstract class RenameOfColumnOperationTemplate {
-	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+export abstract class RenameOfColumnOperationTemplate<DT extends DatabasesTypes> {
+	private readonly _databaseManager: DatabaseManagerInterface<DT>;
 
 	protected constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>
 	) {
 		this._databaseManager = databaseManager;
 	}
 
 	protected async _handleRenameOfColumn(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let queryWithHandledRenameOfColumn = '';
 
@@ -49,8 +49,8 @@ export abstract class RenameOfColumnOperationTemplate {
 	}
 
 	private _getColumnsWhoseNameHasChanged(
-		currentColumns: (ColumnInterface | ComputedColumnInterface)[],
-		lastColumns: (ColumnInterface | ComputedColumnInterface)[]
+		currentColumns: (ColumnInterface<DT> | ComputedColumnInterface<DT>)[],
+		lastColumns: (ColumnInterface<DT> | ComputedColumnInterface<DT>)[]
 	): ColumnChangeInfo[] {
 		return currentColumns.reduce((acc: ColumnChangeInfo[], currentColumn) => {
 			const lastColumn = lastColumns.find(lastColumn => lastColumn.id === currentColumn.id);

@@ -1,20 +1,26 @@
-import { ColumnInterface, ComputedColumnInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import {
+	ColumnInterface,
+	ComputedColumnInterface,
+	DatabaseManagerInterface,
+	DeleteColumnInterface,
+	PrimaryGeneratedColumnInterface
+} from '@myroslavshymon/orm/orm/core';
 import { CompressedTableIngotInterface } from '../../../common/interfaces';
 import { DatabasesTypes } from '@myroslavshymon/orm';
-import { BaseColumnInterface } from '@myroslavshymon/orm/orm/core/interfaces';
+import { BaseColumnInterface, ColumnOptionsInterface } from '@myroslavshymon/orm/orm/core/interfaces';
 
-export abstract class ColumnOperationsTemplate {
-	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+export abstract class ColumnOperationsTemplate<DT extends DatabasesTypes> {
+	private readonly _databaseManager: DatabaseManagerInterface<DT>;
 
 	protected constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>
 	) {
 		this._databaseManager = databaseManager;
 	}
 
 	protected async _handleColumnDeleting(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let deleteColumnsQuery = '';
 
@@ -26,7 +32,7 @@ export abstract class ColumnOperationsTemplate {
 					for (const deletedColumn of deletedColumns) {
 						deleteColumnsQuery += await this._databaseManager.tableManipulation
 							.alterTable(currentTableIngot.name, true)
-							.deleteColumn({ columnName: deletedColumn.name }) + '\n\t\t\t\t';
+							.deleteColumn({ columnName: deletedColumn.name } as DeleteColumnInterface<DT>) + '\n\t\t\t\t';
 					}
 				}
 			}
@@ -36,18 +42,18 @@ export abstract class ColumnOperationsTemplate {
 	}
 
 	private _getDeletedColumns(
-		currentTableIngot: CompressedTableIngotInterface,
-		lastTableIngot: CompressedTableIngotInterface
+		currentTableIngot: CompressedTableIngotInterface<DT>,
+		lastTableIngot: CompressedTableIngotInterface<DT>
 	): BaseColumnInterface[] {
-		const deletedColumns: ColumnInterface[] = lastTableIngot.columns
+		const deletedColumns: ColumnInterface<DT>[] = lastTableIngot.columns
 			.filter(
 				lastColumn => !currentTableIngot.columns
 					.some(currentColumn => currentColumn.id === lastColumn.id)
 			);
 
-		const deletedComputedColumns: ComputedColumnInterface[] = lastTableIngot.computedColumns.filter(lastColumn =>
+		const deletedComputedColumns: ComputedColumnInterface<DT>[] = lastTableIngot.computedColumns.filter(lastColumn =>
 			!currentTableIngot.computedColumns.some(
-				(currentColumn: ComputedColumnInterface) => currentColumn.id === lastColumn.id
+				(currentColumn: ComputedColumnInterface<DT>) => currentColumn.id === lastColumn.id
 			)
 		);
 
@@ -55,8 +61,8 @@ export abstract class ColumnOperationsTemplate {
 	}
 
 	protected async _handleColumnAdding(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let addedColumnsQuery = '';
 
@@ -74,46 +80,49 @@ export abstract class ColumnOperationsTemplate {
 	}
 
 	private async _handleAddedColumns(
-		currentTableIngot: CompressedTableIngotInterface,
-		lastTableIngot: CompressedTableIngotInterface
+		currentTableIngot: CompressedTableIngotInterface<DT>,
+		lastTableIngot: CompressedTableIngotInterface<DT>
 	): Promise<string> {
 		let addedColumnsQuery = '';
 
-		const addedColumns: ColumnInterface[] = currentTableIngot.columns.filter(
+		const addedColumns: ColumnInterface<DT>[] = currentTableIngot.columns.filter(
 			currentColumn => !lastTableIngot.columns.some(lastColumn => lastColumn.id === currentColumn.id)
 		);
 
 		for (const addedColumn of addedColumns) {
 			addedColumnsQuery += await this._databaseManager.tableManipulation
 				.alterTable(currentTableIngot.name, true)
-				.addColumn({ columnName: addedColumn.name, options: addedColumn.options }) + '\n\t\t\t\t';
+				.addColumn({
+					columnName: addedColumn.name,
+					options: addedColumn.options as ColumnOptionsInterface<DT>
+				}) + '\n\t\t\t\t';
 		}
 
 		return addedColumnsQuery;
 	}
 
 	private async _handleAddedComputedColumns(
-		currentTableIngot: CompressedTableIngotInterface,
-		lastTableIngot: CompressedTableIngotInterface
+		currentTableIngot: CompressedTableIngotInterface<DT>,
+		lastTableIngot: CompressedTableIngotInterface<DT>
 	): Promise<string> {
 		let addedColumnsQuery = '';
 
-		const addedComputedColumns: ComputedColumnInterface[] = currentTableIngot.computedColumns.filter(
+		const addedComputedColumns: ComputedColumnInterface<DT>[] = currentTableIngot.computedColumns.filter(
 			currentColumn => !lastTableIngot.computedColumns.some(lastColumn => lastColumn.id === currentColumn.id)
 		);
 
 		for (const { name, dataType, calculate } of addedComputedColumns) {
 			addedColumnsQuery += await this._databaseManager.tableManipulation
 				.alterTable(name, true)
-				.addComputedColumn({ dataType, calculate }) + '\n\t\t\t\t';
+				.addComputedColumn({ dataType, calculate } as ComputedColumnInterface<DT>) + '\n\t\t\t\t';
 		}
 
 		return addedColumnsQuery;
 	}
 
 	private async _handlePrimaryColumn(
-		currentTableIngot: CompressedTableIngotInterface,
-		lastTableIngot: CompressedTableIngotInterface
+		currentTableIngot: CompressedTableIngotInterface<DT>,
+		lastTableIngot: CompressedTableIngotInterface<DT>
 	): Promise<string> {
 		let addedColumnsQuery = '';
 
@@ -123,7 +132,7 @@ export abstract class ColumnOperationsTemplate {
 				.addPrimaryGeneratedColumn({
 					columnName: currentTableIngot.primaryColumn.columnName,
 					type: currentTableIngot.primaryColumn.type
-				}) + '\n\t\t\t\t';
+				} as PrimaryGeneratedColumnInterface<DT>) + '\n\t\t\t\t';
 		}
 
 		if (!currentTableIngot.primaryColumn && lastTableIngot.primaryColumn) {
@@ -131,7 +140,7 @@ export abstract class ColumnOperationsTemplate {
 				.alterTable(currentTableIngot.name, true)
 				.deleteColumn({
 					columnName: lastTableIngot.primaryColumn.columnName
-				}) + '\n\t\t\t\t';
+				} as DeleteColumnInterface<DT>) + '\n\t\t\t\t';
 		}
 
 		return addedColumnsQuery;

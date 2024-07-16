@@ -8,23 +8,26 @@ import {
 	UpdateMigrationIngotInterface,
 	UpdateMigrationStatusInterface
 } from '../../common';
+import { DatabasesTypes } from '@myroslavshymon/orm';
+import { Connection } from 'mysql2/promise';
+import { PoolClient } from 'pg';
 
-export interface DatabaseStrategy {
-	client: any;
+export interface DatabaseStrategy<DT extends DatabasesTypes> {
+	client: DT extends DatabasesTypes.MYSQL ? Connection : DT extends DatabasesTypes.POSTGRES ? PoolClient : never;
 
 	connect(dataToConnect: ConnectionData): Promise<void>;
 
 	checkTableExistence(options: CheckTableExistenceInterface): Promise<void>;
 
-	createMigration(options: AddMigrationInterface): Promise<void>;
+	createMigration(options: AddMigrationInterface<DT>): Promise<void>;
 
-	getCurrentDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface>;
+	getCurrentDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface<DT>>;
 
-	getLastDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface>;
+	getLastDatabaseIngot(options: GetMigrationTableInterface): Promise<DatabaseIngotInterface<DT>>;
 
 	updateMigrationStatus(options: UpdateMigrationStatusInterface): Promise<void>;
 
-	updateMigrationIngot(options: UpdateMigrationIngotInterface): Promise<void>;
+	updateMigrationIngot(options: UpdateMigrationIngotInterface<DT>): Promise<void>;
 
 	getMigrationByName(options: GetMigrationByNameInterface): Promise<{ name: string, is_up: boolean }[]>;
 

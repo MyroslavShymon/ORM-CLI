@@ -2,18 +2,18 @@ import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common';
 
-export abstract class ColumnCheckOperationTemplate {
-	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+export abstract class ColumnCheckOperationTemplate<DT extends DatabasesTypes> {
+	private readonly _databaseManager: DatabaseManagerInterface<DT>;
 
 	protected constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>
 	) {
 		this._databaseManager = databaseManager;
 	}
 
 	protected async _handleColumnCheckConstraintChange(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let queryWithHandledCheckConstraint = '';
 

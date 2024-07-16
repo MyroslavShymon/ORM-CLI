@@ -1,19 +1,19 @@
 import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
-import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 
-export abstract class ColumnDataTypeOperationTemplate {
-	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+export abstract class ColumnDataTypeOperationTemplate<DT extends DatabasesTypes> {
+	private readonly _databaseManager: DatabaseManagerInterface<DT>;
 
 	protected constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>
 	) {
 		this._databaseManager = databaseManager;
 	}
 
 	protected async _handleColumnDataTypeChange(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let queryWithHandledDataType = '';
 

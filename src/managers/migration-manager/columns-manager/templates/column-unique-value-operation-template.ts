@@ -1,19 +1,19 @@
-import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import { AddUniqueToColumnInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common';
 
-export abstract class ColumnUniqueValueOperationTemplate {
-	private readonly _databaseManager: DatabaseManagerInterface<DatabasesTypes>;
+export abstract class ColumnUniqueValueOperationTemplate<DT extends DatabasesTypes> {
+	private readonly _databaseManager: DatabaseManagerInterface<DT>;
 
 	protected constructor(
-		databaseManager: DatabaseManagerInterface<DatabasesTypes>
+		databaseManager: DatabaseManagerInterface<DT>
 	) {
 		this._databaseManager = databaseManager;
 	}
 
 	protected async _handleColumnUniqueChange(
-		currentTableIngotList: CompressedTableIngotInterface[],
-		lastTableIngotList: CompressedTableIngotInterface[]
+		currentTableIngotList: CompressedTableIngotInterface<DT>[],
+		lastTableIngotList: CompressedTableIngotInterface<DT>[]
 	): Promise<string> {
 		let queryWithHandledUnique = '';
 
@@ -37,7 +37,8 @@ export abstract class ColumnUniqueValueOperationTemplate {
 						} else {
 							queryWithHandledUnique += await this._databaseManager.tableManipulation
 								.alterTable(currentTableIngot.name, true)
-								.addUniqueToColumn({ columnName: columnWithChangedUnique.name }
+								.addUniqueToColumn(
+									{ columnName: columnWithChangedUnique.name } as AddUniqueToColumnInterface<DT>
 								) + '\n\t\t\t\t';
 						}
 					}
