@@ -83,7 +83,8 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		const migration = await this._databaseContext.getMigrationByName({
 			migrationName: migrationName.split('.migration.ts')[0],
 			migrationTable: this._connectionData.migrationTable,
-			migrationTableSchema: this._connectionData.migrationTableSchema
+			migrationTableSchema: this._connectionData.migrationTableSchema,
+			databaseName: this._connectionData.database
 		});
 
 		if (migration[0].is_up && direction === 'up') {
@@ -141,7 +142,8 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			migrationTable: this._connectionData.migrationTable,
 			migrationTableSchema: this._connectionData.migrationTableSchema,
 			migrationName: migrationName.split('.migration.ts')[0],
-			isUp
+			isUp,
+			databaseName: this._connectionData.database
 		});
 	}
 
@@ -216,7 +218,8 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			const migrationsByName = await this._databaseContext.getMigrationByName({
 				migrationName: migrationName,
 				migrationTableSchema: this._connectionData.migrationTableSchema,
-				migrationTable: this._connectionData.migrationTable
+				migrationTable: this._connectionData.migrationTable,
+				databaseName: this._connectionData.database
 			});
 			if (migrationsByName.length) {
 				throw Error(`Migrations with name '${migrationName}' already exist`);
@@ -248,12 +251,14 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		});
 		let currentDatabaseIngot: DatabaseIngotInterface<DT> = await this._databaseContext.getCurrentDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
-			migrationTableSchema: this._connectionData.migrationTableSchema
+			migrationTableSchema: this._connectionData.migrationTableSchema,
+			databaseName: this._connectionData.database
 		});
 
 		const lastDatabaseIngot: DatabaseIngotInterface<DT> = await this._databaseContext.getLastDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,
-			migrationTableSchema: this._connectionData.migrationTableSchema
+			migrationTableSchema: this._connectionData.migrationTableSchema,
+			databaseName: this._connectionData.database
 		});
 
 		const migrationQueries = await this._createMigrationQuery(currentDatabaseIngot, lastDatabaseIngot, isMigrationsExist);
@@ -263,7 +268,8 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			migrationName,
 			databaseIngot: currentDatabaseIngot,
 			migrationTable: this._connectionData.migrationTable,
-			migrationTableSchema: this._connectionData.migrationTableSchema
+			migrationTableSchema: this._connectionData.migrationTableSchema,
+			databaseName: this._connectionData.database
 		});
 		console.log(`Migration created at ${migrationPath}`);
 		return;
@@ -277,6 +283,7 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 	): Promise<MigrationQueriesInterface> {
 		let migrationQuery = '';
 		let undoMigrationQuery = '';
+		console.log('isMigrationsExist', isMigrationsExist);
 		if (!isMigrationsExist) {
 			migrationQuery += this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
 
@@ -341,8 +348,8 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		undoMigrationQuery += tableUndoMigrationQuery;
 
 		if (!migrationQuery || !undoMigrationQuery) {
-			console.error('There is no changes to make migration.\n Please restart your app!');
-			throw new Error('There is no changes to make migration.\n Please restart your app!');
+			console.error('There is no changes to make migration or migrations are already exists.\n Please restart your app!');
+			throw new Error('There is no changes to make migration or migrations are already exists.\n Please restart your app!');
 		}
 
 		return { migrationQuery, undoMigrationQuery };

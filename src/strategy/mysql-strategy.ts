@@ -1,10 +1,11 @@
-import { Connection, createConnection } from 'mysql2/promise';
+import { Connection, createConnection, RowDataPacket } from 'mysql2/promise';
 import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
-import { DatabaseStrategy } from './interfaces';
+import { DatabaseStrategy, MigrationRowInterface } from './interfaces';
 import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
 	ConnectionData,
+	constants,
 	GetMigrationByNameInterface,
 	GetMigrationTableInterface,
 	UpdateMigrationIngotInterface,
@@ -23,11 +24,11 @@ export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 	async createMigration({
 							  databaseIngot,
 							  migrationName,
-							  migrationTable = 'migrations',
-							  migrationTableSchema = 'public'
+							  databaseName,
+							  migrationTable = constants.migrationsTableName
 						  }: AddMigrationInterface<DatabasesTypes.MYSQL>
 	): Promise<void> {
-		const addMigrationQuery = `INSERT INTO ${migrationTableSchema}.${migrationTable} (name, ingot)
+		const addMigrationQuery = `INSERT INTO ${databaseName}.${migrationTable} (name, ingot)
                                    VALUES ('${migrationName}', '${JSON.stringify(databaseIngot)}');`;
 
 		await this.client.query(addMigrationQuery);
@@ -35,81 +36,100 @@ export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 	}
 
 	async getCurrentDatabaseIngot({
-									  migrationTable,
-									  migrationTableSchema
+									  migrationTable = constants.migrationsTableName,
+									  databaseName
 								  }: GetMigrationTableInterface
 	): Promise<DatabaseIngotInterface<DatabasesTypes.MYSQL>> {
 		const getCurrentDatabaseIngotQuery = `SELECT *
-                                              FROM ${migrationTableSchema}.${migrationTable}
-                                              WHERE name = 'current_database_ingot';`;
-		const response = await this.client.query(getCurrentDatabaseIngotQuery);
-		//TODO зробити для mysql
-		// const currentDatabaseIngot: DatabaseIngotInterface = response.sql[0].ingot;
-		// подивитись як реалізовано в postgres і зробити поп прикладу
-		console.log(`Current database ingot`, response);
-		// return currentDatabaseIngot;
-		return { tables: [] };
+                                              FROM ${databaseName}.${migrationTable}
+                                              WHERE name = '${constants.currentDatabaseIngot}';`;
+
+		const [rows]: [MigrationRowInterface[], any] = await this.client.query(getCurrentDatabaseIngotQuery);
+
+		if (rows.length === 0) {
+			throw new Error('Initialize ORM!');
+		}
+
+		console.log(`Current database ingot`, rows[0].ingot);
+		return rows[0].ingot;
 	}
 
 	async getLastDatabaseIngot(
 		{
-			migrationTableSchema,
-			migrationTable
+			migrationTable = constants.migrationsTableName,
+			databaseName
 		}: GetMigrationTableInterface
 	): Promise<DatabaseIngotInterface<DatabasesTypes.MYSQL>> {
 		const getLastDatabaseIngotQuery = `SELECT *
-                                           FROM ${migrationTableSchema}.${migrationTable}
+                                           FROM ${databaseName}.${migrationTable}
                                            ORDER BY id DESC LIMIT 1;`;
-		//TODO
-		// const response = await this.client.query(getLastDatabaseIngotQuery);
-		// if (response.rows.length === 0) {
-		// 	throw new Error('Initialize ORM!');
-		// }
-		// return response.rows[0].ingot;
-		return { tables: [] };
+
+
+		const [rows]: [MigrationRowInterface[], any] = await this.client.query(getLastDatabaseIngotQuery);
+
+		if (rows.length === 0) {
+			throw new Error('Initialize ORM!');
+		}
+
+		return rows[0].ingot;
 	}
 
 	async updateMigrationStatus({
-									migrationTable,
-									migrationTableSchema,
+									migrationTable = constants.migrationsTableName,
 									migrationName,
+									databaseName,
 									isUp
 								}: UpdateMigrationStatusInterface
 	): Promise<void> {
 		const updateMigrationStatusQuery = `
-            UPDATE ${migrationTableSchema}.${migrationTable}
+            UPDATE ${databaseName}.${migrationTable}
             SET is_up = ${isUp.toString()}
             WHERE name = '${migrationName}';
 		`;
+
 		await this.client.query(updateMigrationStatusQuery);
 		console.log(`Migration status of ${migrationName} is updated to ${isUp}`);
 	}
 
 	async updateMigrationIngot({
+								   migrationTable = constants.migrationsTableName,
+								   migrationTableSchema = constants.migrationsTableSchemaName,
 								   ingot,
-								   migrationTable,
-								   migrationTableSchema,
 								   migrationName
 							   }: UpdateMigrationIngotInterface<DatabasesTypes.MYSQL>): Promise<void> {
 		const updateMigrationIngotQuery = `
             UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
             SET ingot = '${JSON.stringify(ingot)}'
-            WHERE name = '${migrationName ? migrationName : 'current_database_ingot'}';
+            WHERE name = '${migrationName ? migrationName : constants.currentDatabaseIngot}';
 		`;
+
 		await this.client.query(updateMigrationIngotQuery);
-		console.log(`Ingot of migration ${migrationName ? migrationName : 'current_database_ingot'} is updated`);
+		console.log(`Ingot of migration ${migrationName ? migrationName : constants.currentDatabaseIngot} is updated`);
 	}
 
 	async checkTableExistence(options: CheckTableExistenceInterface): Promise<void> {
-		console.log('checkTableExistence', options);
+		const checkTableExistenceQuery = `SELECT COUNT(*)
+                                                     AS tableExists
+                                          FROM information_schema.tables
+                                          WHERE table_name = '${options.tableName}';`;
+
+		const [rows]: [RowDataPacket[], any] = await this.client.execute(checkTableExistenceQuery);
+		const tableExists = rows[0].tableExists > 0;
+		if (!tableExists) {
+			throw new Error(`Table with name ${options.tableName} doesn't exist\n
+		    To resolve this Error you need to run the app\n`);
+		}
 	}
 
 	async getMigrationByName({
-								 migrationName,
-								 migrationTable,
-								 migrationTableSchema
+								 migrationTable = constants.migrationsTableName,
+								 migrationName, databaseName
 							 }: GetMigrationByNameInterface): Promise<any> {
-		console.log('getMigrationByNameQuery');
+		const getMigrationByNameQuery = `SELECT name, is_up
+                                         FROM ${databaseName}.${migrationTable}
+                                         WHERE name LIKE '%${migrationName}'`;
+		const [migrations] = await this.client.query(getMigrationByNameQuery);
+		return migrations;
 	}
 
 	async query(sql: string): Promise<any> {

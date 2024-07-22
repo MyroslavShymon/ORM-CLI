@@ -4,6 +4,7 @@ import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
 	ConnectionData,
+	constants,
 	GetMigrationByNameInterface,
 	GetMigrationTableInterface,
 	UpdateMigrationIngotInterface,
@@ -42,7 +43,7 @@ export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTG
 	): Promise<DatabaseIngotInterface<DatabasesTypes.POSTGRES>> {
 		const getCurrentDatabaseIngotQuery = `SELECT *
                                               FROM ${migrationTableSchema}.${migrationTable}
-                                              WHERE name = 'current_database_ingot';`;
+                                              WHERE name = '${constants.currentDatabaseIngot}';`;
 		const response = await this.client.query(getCurrentDatabaseIngotQuery);
 		if (response.rows.length === 0) {
 			throw new Error('Initialize ORM!');
@@ -65,7 +66,6 @@ export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTG
 			throw new Error('Initialize ORM!');
 		}
 
-		//TODO Typing
 		return response.rows[0].ingot;
 	}
 
@@ -81,6 +81,7 @@ export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTG
             SET is_up = ${isUp.toString()}
             WHERE name = '${migrationName}';
 		`;
+
 		await this.client.query(updateMigrationStatusQuery);
 		console.log(`Migration status of ${migrationName} is updated to ${isUp}`);
 	}
@@ -94,10 +95,11 @@ export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTG
 		const updateMigrationIngotQuery = `
             UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
             SET ingot = '${JSON.stringify(ingot)}'
-            WHERE name = '${migrationName ? migrationName : 'current_database_ingot'}';
+            WHERE name = '${migrationName ? migrationName : constants.currentDatabaseIngot}';
 		`;
+		
 		await this.client.query(updateMigrationIngotQuery);
-		console.log(`Ingot of migration ${migrationName ? migrationName : 'current_database_ingot'} is updated`);
+		console.log(`Ingot of migration ${migrationName ? migrationName : constants.currentDatabaseIngot} is updated`);
 	}
 
 	async checkTableExistence(options: CheckTableExistenceInterface): Promise<void> {
