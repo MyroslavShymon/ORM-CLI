@@ -17,7 +17,7 @@ export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 	client!: Connection;
 
 	async connect(dataToConnect: ConnectionData): Promise<void> {
-		this.client = await createConnection(dataToConnect);
+		this.client = await createConnection({ ...dataToConnect, multipleStatements: true });
 		console.log('Connect with MySQL');
 	}
 
