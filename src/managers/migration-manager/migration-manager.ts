@@ -365,13 +365,13 @@ import {DatabasesTypes} from "@myroslavshymon/orm";
 export class ${migrationName} implements MigrationInterface {
     async up(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<void> {
         await databaseManager.query(
-            \`${migrationQuery}\`
+            \`${this._databaseType === DatabasesTypes.POSTGRES ? migrationQuery : migrationQuery.replace(/\`/g, '\\\`')}\`
         );
     }
 
    async down(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<void> {
        await databaseManager.query(
-             \`${undoMigrationQuery}\`
+             \`${this._databaseType === DatabasesTypes.POSTGRES ? undoMigrationQuery : migrationQuery.replace(/\`/g, '\\\`')}\`
        );
     }
 }`;
