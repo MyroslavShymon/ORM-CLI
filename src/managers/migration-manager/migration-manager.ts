@@ -38,6 +38,7 @@ import {
 } from './columns-manager';
 import { TableManager } from './tables-manager';
 import { ForeignKeysManager } from './foreign-keys-manager';
+import { TriggerManager } from './trigger-manager';
 
 export class MigrationManager<DT extends DatabasesTypes> implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
@@ -283,9 +284,14 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 	): Promise<MigrationQueriesInterface> {
 		let migrationQuery = '';
 		let undoMigrationQuery = '';
-		console.log('isMigrationsExist', isMigrationsExist);
+
 		if (!isMigrationsExist) {
+			console.info('Migrations didn\'t exist before!');
 			migrationQuery += this._databaseManager.tableCreator.generateCreateTableQuery(currentDatabaseIngot.tables);
+
+			const [triggerMigrationQuery, triggerUndoMigrationQuery] = await TriggerManager.initManage<DT>(currentDatabaseIngot, this._databaseManager, this._databaseType);
+			migrationQuery += triggerMigrationQuery;
+			undoMigrationQuery += triggerUndoMigrationQuery;
 
 			for (const table of currentDatabaseIngot.tables) {
 				let dropTableOptions: DropTableInterface<DT>;
@@ -346,6 +352,11 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		const [tableMigrationQuery, tableUndoMigrationQuery] = await TableManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
 		migrationQuery += tableMigrationQuery;
 		undoMigrationQuery += tableUndoMigrationQuery;
+
+		const [triggerMigrationQuery, triggerUndoMigrationQuery] = await TriggerManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
+
+		migrationQuery += triggerMigrationQuery;
+		undoMigrationQuery += triggerUndoMigrationQuery;
 
 		if (!migrationQuery || !undoMigrationQuery) {
 			console.error('There is no changes to make migration or migrations are already exists.\n Please restart your app!');
