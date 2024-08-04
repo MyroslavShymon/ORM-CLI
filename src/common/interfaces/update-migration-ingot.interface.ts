@@ -2,8 +2,9 @@ import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 
 export interface UpdateMigrationIngotInterface<DT extends DatabasesTypes> {
-	ingot: DatabaseIngotInterface<DT>;
+	migrationName: string;
+	ingot?: DatabaseIngotInterface<DT>;
+	sql?: string;
 	migrationTable?: string;
 	migrationTableSchema?: string;
-	migrationName?: string;
 }

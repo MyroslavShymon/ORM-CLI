@@ -29,7 +29,7 @@ export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 						  }: AddMigrationInterface<DatabasesTypes.MYSQL>
 	): Promise<void> {
 		const addMigrationQuery = `INSERT INTO ${databaseName}.${migrationTable} (name, ingot)
-                                   VALUES ('${migrationName}', '${JSON.stringify(databaseIngot)}');`;
+                                   VALUES ('${migrationName}', '${JSON.stringify(databaseIngot).replace(/'/g, '\'\'')}');`;
 
 		await this.client.query(addMigrationQuery);
 		console.log(`Migration is add successfully`);
@@ -95,11 +95,13 @@ export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 								   migrationTable = constants.migrationsTableName,
 								   migrationTableSchema = constants.migrationsTableSchemaName,
 								   ingot,
-								   migrationName
+								   migrationName,
+								   sql
 							   }: UpdateMigrationIngotInterface<DatabasesTypes.MYSQL>): Promise<void> {
 		const updateMigrationIngotQuery = `
             UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
-            SET ingot = '${JSON.stringify(ingot)}'
+            ${ingot ? `SET ingot = '${JSON.stringify(ingot).replace(/'/g, '\'\'')}'` : ''}
+            ${sql ? `SET SQL = '${sql.replace(/'/g, '\'\'')}'` : ''}            
             WHERE name = '${migrationName ? migrationName : constants.currentDatabaseIngot}';
 		`;
 

@@ -30,7 +30,7 @@ export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTG
 						  }: AddMigrationInterface<DatabasesTypes.POSTGRES>
 	): Promise<void> {
 		const addMigrationQuery = `INSERT INTO ${migrationTableSchema}.${migrationTable} (name, ingot)
-                                   VALUES ('${migrationName}', '${JSON.stringify(databaseIngot)}');`;
+                                   VALUES ('${migrationName}', '${JSON.stringify(databaseIngot).replace(/'/g, '\'\'')}');`;
 
 		await this.client.query(addMigrationQuery);
 		console.log(`Migration is add successfully`);
@@ -87,17 +87,19 @@ export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTG
 	}
 
 	async updateMigrationIngot({
+								   migrationTable = constants.migrationsTableName,
+								   migrationTableSchema = constants.migrationsTableSchemaName,
 								   ingot,
-								   migrationTable,
-								   migrationTableSchema,
-								   migrationName
+								   migrationName,
+								   sql
 							   }: UpdateMigrationIngotInterface<DatabasesTypes.POSTGRES>): Promise<void> {
 		const updateMigrationIngotQuery = `
             UPDATE ${migrationTableSchema ? migrationTableSchema + '.' : ''}${migrationTable ? migrationTable : ''}
-            SET ingot = '${JSON.stringify(ingot)}'
+            ${ingot ? `SET ingot = '${JSON.stringify(ingot).replace(/'/g, '\'\'')}'` : ''}
+            ${sql ? `SET SQL = '${sql.replace(/'/g, '\'\'')}'` : ''}     
             WHERE name = '${migrationName ? migrationName : constants.currentDatabaseIngot}';
 		`;
-		
+
 		await this.client.query(updateMigrationIngotQuery);
 		console.log(`Ingot of migration ${migrationName ? migrationName : constants.currentDatabaseIngot} is updated`);
 	}

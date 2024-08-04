@@ -12,7 +12,12 @@ import {
 import { DatabaseContextInterface } from '../../strategy';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CommandClass, CompressedTableIngotInterface, MigrationQueriesInterface, OperationClass } from '../common';
-import { DatabaseIngotInterface, DatabaseManagerInterface, DropTableInterface } from '@myroslavshymon/orm/orm/core';
+import {
+	DatabaseIngotInterface,
+	DatabaseManagerInterface,
+	DropTableInterface,
+	MigrationInterface
+} from '@myroslavshymon/orm/orm/core';
 import {
 	AddColumnCommand,
 	AddColumnOperation,
@@ -78,33 +83,55 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 	}
 
 	private async _migrateDownOrUp(migrationName: string, direction: MigrationsType): Promise<void> {
-		await this._prepareMigration();
-		const filePath = path.resolve(this._projectRoot, `migrations`, migrationName);
-		const migrationClassName = this._extractMigrationClassName(migrationName);
+		try {
+			await this._prepareMigration();
+			const filePath = path.resolve(this._projectRoot, `migrations`, migrationName);
+			const migrationClassName = this._extractMigrationClassName(migrationName);
+			tsNode.register();
+			const migrationModule = require(filePath);
+			const MigrationClass = migrationModule[migrationClassName];
 
-		const migration = await this._databaseContext.getMigrationByName({
-			migrationName: migrationName.split('.migration.ts')[0],
-			migrationTable: this._connectionData.migrationTable,
-			migrationTableSchema: this._connectionData.migrationTableSchema,
-			databaseName: this._connectionData.database
-		});
+			const migrationInstance: MigrationInterface = new MigrationClass();
+			let query: string = '';
 
-		if (migration[0].is_up && direction === 'up') {
-			console.error('Migration is already upped');
-			return;
-		}
+			const migration = await this._databaseContext.getMigrationByName({
+				migrationName: migrationName.split('.migration.ts')[0],
+				migrationTable: this._connectionData.migrationTable,
+				migrationTableSchema: this._connectionData.migrationTableSchema,
+				databaseName: this._connectionData.database
+			});
 
-		if (!migration[0].is_up && direction === 'down') {
-			console.error('Migration is already downed');
-			return;
-		}
+			if (migration[0].is_up && direction === 'up') {
+				console.error('Migration is already upped');
+				return;
+			}
 
-		if (
-			(!migration[0].is_up && direction === 'up') ||
-			(migration[0].is_up && direction === 'down')
-		) {
-			await this._runMigration(filePath, migrationClassName, direction);
-			await this._updateMigrationStatus(migrationName, direction === 'up');
+			if (!migration[0].is_up && direction === 'down') {
+				console.error('Migration is already downed');
+				return;
+			}
+
+			if (!migration[0].is_up && direction === 'up') {
+				query = await migrationInstance.up(this._databaseManager);
+			}
+
+			if (migration[0].is_up && direction === 'down') {
+				query = await migrationInstance.down(this._databaseManager);
+			}
+
+			if (
+				(!migration[0].is_up && direction === 'up') ||
+				(migration[0].is_up && direction === 'down')
+			) {
+				await this._databaseContext.updateMigrationIngot({
+					migrationName: migrationName.split('.migration.ts')[0],
+					sql: query
+				});
+				await this._updateMigrationStatus(migrationName, direction === 'up');
+			}
+		} catch (error) {
+			console.log('Error while migrate up or down');
+			throw error;
 		}
 	}
 
@@ -123,21 +150,21 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		);
 	}
 
-	private async _runMigration(filePath: string, migrationClassName: string, direction: MigrationsType) {
-		tsNode.register();
-		const module = require(filePath);
-		const MigrationClass = module[migrationClassName];
-
-		const migrationClass = new MigrationClass();
-
-		if (direction === 'up') {
-			await migrationClass.up(this._databaseManager);
-		} else if (direction === 'down') {
-			await migrationClass.down(this._databaseManager);
-		} else {
-			throw new Error(`Invalid migration direction: ${direction}. Must be 'up' or 'down'.`);
-		}
-	}
+	// private async _runMigration(filePath: string, migrationClassName: string, direction: MigrationsType) {
+	// 	tsNode.register();
+	// 	const module = require(filePath);
+	// 	const MigrationClass = module[migrationClassName];
+	//
+	// 	const migrationClass = new MigrationClass();
+	//
+	// 	if (direction === 'up') {
+	// 		await migrationClass.up(this._databaseManager);
+	// 	} else if (direction === 'down') {
+	// 		await migrationClass.down(this._databaseManager);
+	// 	} else {
+	// 		throw new Error(`Invalid migration direction: ${direction}. Must be 'up' or 'down'.`);
+	// 	}
+	// }
 
 	private async _updateMigrationStatus(migrationName: string, isUp: boolean): Promise<void> {
 		await this._databaseContext.updateMigrationStatus({
@@ -150,17 +177,21 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 	}
 
 	/////////Create migration/////////
-
 	async createMigration(migrationName: string | boolean): Promise<void> {
-		const migrationPath = path.resolve(this._projectRoot, 'migrations');
+		try {
+			const migrationPath = path.resolve(this._projectRoot, 'migrations');
 
-		await this._handleMigrationFolderCreation(migrationPath);
+			await this._handleMigrationFolderCreation(migrationPath);
 
-		const isMigrationsExist = fs.readdirSync(migrationPath).length !== 0;
+			const isMigrationsExist = fs.readdirSync(migrationPath).length !== 0;
 
-		migrationName = await this._generateMigrationName(migrationName, isMigrationsExist);
+			migrationName = await this._generateMigrationName(migrationName, isMigrationsExist);
 
-		await this._handleMigrationCreation(migrationPath, migrationName, isMigrationsExist);
+			await this._handleMigrationCreation(migrationPath, migrationName, isMigrationsExist);
+		} catch (error) {
+			console.log(Error('Error in create migration'));
+			throw error;
+		}
 	}
 
 	private async _handleMigrationFolderCreation(migrationPath: string) {
@@ -384,16 +415,20 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 import {DatabasesTypes} from "@myroslavshymon/orm";
 
 export class ${migrationName} implements MigrationInterface {
-    async up(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<void> {
-        await databaseManager.query(
-            \`${this._databaseType === DatabasesTypes.POSTGRES ? migrationQuery : migrationQuery.replace(/\`/g, '\\\`')}\`
-        );
+    async up(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<string> {
+        const sql = \`${this._databaseType === DatabasesTypes.POSTGRES ? migrationQuery : migrationQuery.replace(/\`/g, '\\\`')}\`
+        
+        await databaseManager.query(sql);
+        
+        return sql;
     }
 
-   async down(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<void> {
-       await databaseManager.query(
-             \`${this._databaseType === DatabasesTypes.POSTGRES ? undoMigrationQuery : migrationQuery.replace(/\`/g, '\\\`')}\`
-       );
+   async down(databaseManager: DatabaseManagerInterface<${this._databaseType === DatabasesTypes.POSTGRES ? 'DatabasesTypes.POSTGRES' : 'DatabasesTypes.MYSQL'}>): Promise<string> {
+       const sql = \`${this._databaseType === DatabasesTypes.POSTGRES ? undoMigrationQuery : migrationQuery.replace(/\`/g, '\\\`')}\`
+      
+       await databaseManager.query(sql);
+       
+       return sql;
     }
 }`;
 		fs.writeFileSync(migrationPath, migrationContent);
