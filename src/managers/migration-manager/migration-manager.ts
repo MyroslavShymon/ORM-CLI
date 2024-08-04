@@ -39,6 +39,7 @@ import {
 import { TableManager } from './tables-manager';
 import { ForeignKeysManager } from './foreign-keys-manager';
 import { TriggerManager } from './trigger-manager';
+import { IndexManager } from './index-manger';
 
 export class MigrationManager<DT extends DatabasesTypes> implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
@@ -293,6 +294,10 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			migrationQuery += triggerMigrationQuery;
 			undoMigrationQuery += triggerUndoMigrationQuery;
 
+			const [indexMigrationQuery, indexUndoMigrationQuery] = await IndexManager.initManage<DT>(currentDatabaseIngot, this._databaseManager, this._databaseType);
+			migrationQuery += indexMigrationQuery;
+			undoMigrationQuery += indexUndoMigrationQuery;
+
 			for (const table of currentDatabaseIngot.tables) {
 				let dropTableOptions: DropTableInterface<DT>;
 
@@ -357,6 +362,11 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 
 		migrationQuery += triggerMigrationQuery;
 		undoMigrationQuery += triggerUndoMigrationQuery;
+
+		const [indexMigrationQuery, indexUndoMigrationQuery] = await IndexManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
+
+		migrationQuery += indexMigrationQuery;
+		undoMigrationQuery += indexUndoMigrationQuery;
 
 		if (!migrationQuery || !undoMigrationQuery) {
 			console.error('There is no changes to make migration or migrations are already exists.\n Please restart your app!');
