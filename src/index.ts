@@ -14,6 +14,7 @@ commander
 	.description('ClI to work with ORM system')
 	.option('-i, --init', 'Init ORM')
 	.option('-mc, --migration:create [char]', 'Create migration')
+	.option('-em, --empty', 'Empty migration')
 	.option('-mup, --migration:up <char>', 'Migration up')
 	.option('-mud, --migration:down <char>', 'Migration down')
 	.option('-mu, --migrate:up', 'All migrations up')

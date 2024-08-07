@@ -47,8 +47,12 @@ export class CLI<DT extends DatabasesTypes> {
 		if (commanderOptions.init) {
 			this._initManager.runInit();
 		}
-		if (commanderOptions['migration:create']) {
-			this._migrationManager.createMigration(commanderOptions['migration:create']);
+		if (commanderOptions['migration:create'] && !commanderOptions.empty) {
+			this._migrationManager.createMigration(commanderOptions['migration:create'], false);
+		}
+
+		if (commanderOptions['migration:create'] && commanderOptions.empty) {
+			this._migrationManager.createMigration(commanderOptions['migration:create'], true);
 		}
 
 		if (commanderOptions['migration:up']) {

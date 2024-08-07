@@ -177,7 +177,7 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 	}
 
 	/////////Create migration/////////
-	async createMigration(migrationName: string | boolean): Promise<void> {
+	async createMigration(migrationName: string | boolean, isMigrationEmpty?: boolean): Promise<void> {
 		try {
 			const migrationPath = path.resolve(this._projectRoot, 'migrations');
 
@@ -187,7 +187,7 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 
 			migrationName = await this._generateMigrationName(migrationName, isMigrationsExist);
 
-			await this._handleMigrationCreation(migrationPath, migrationName, isMigrationsExist);
+			await this._handleMigrationCreation(migrationPath, migrationName, isMigrationsExist, isMigrationEmpty);
 		} catch (error) {
 			console.log(Error('Error in create migration'));
 			throw error;
@@ -276,7 +276,8 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 	private async _handleMigrationCreation(
 		migrationPath: string,
 		migrationName: string,
-		isMigrationsExist: boolean
+		isMigrationsExist: boolean,
+		isMigrationEmpty?: boolean
 	) {
 		await this._databaseContext.checkTableExistence({
 			tableName: this._connectionData.migrationTable,
@@ -287,6 +288,21 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			migrationTableSchema: this._connectionData.migrationTableSchema,
 			databaseName: this._connectionData.database
 		});
+
+		if (isMigrationEmpty) {
+			this._createMigrationFile(migrationPath, migrationName, '', '');
+
+			await this._databaseContext.createMigration({
+				migrationName,
+				databaseIngot: currentDatabaseIngot,
+				migrationTable: this._connectionData.migrationTable,
+				migrationTableSchema: this._connectionData.migrationTableSchema,
+				databaseName: this._connectionData.database
+			});
+
+			console.log(`Migration created at ${migrationPath}`);
+			return;
+		}
 
 		const lastDatabaseIngot: DatabaseIngotInterface<DT> = await this._databaseContext.getLastDatabaseIngot({
 			migrationTable: this._connectionData.migrationTable,

@@ -1,7 +1,7 @@
 import { MigrationsType } from '../types';
 
 export interface MigrationManagerInterface {
-	createMigration(migrationName: string | boolean): Promise<void>;
+	createMigration(migrationName: string | boolean, isMigrationEmpty?: boolean): Promise<void>;
 
 	migrationUp(migrationName: string): Promise<void>;
 
