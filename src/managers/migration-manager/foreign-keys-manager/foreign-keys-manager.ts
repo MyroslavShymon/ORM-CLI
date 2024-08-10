@@ -1,4 +1,10 @@
-import { DatabaseIngotInterface, DatabaseManagerInterface, ManyToManyInterface } from '@myroslavshymon/orm/orm/core';
+import {
+	ColumnMysqlInterface,
+	ColumnPostgresInterface,
+	DatabaseIngotInterface,
+	DatabaseManagerInterface,
+	ManyToManyInterface
+} from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { TableIngotInterface } from '@myroslavshymon/orm/orm/core/interfaces/table-ingot.interface';
 import {
@@ -17,6 +23,9 @@ export class ForeignKeysManager {
 		let migrationQuery = '';
 		let undoMigrationQuery = '';
 
+		migrationQuery += await this._handleForeignKeysInTable<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager);
+		undoMigrationQuery += await this._handleForeignKeysInTable<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager);
+
 		migrationQuery += await this._handleManyToManyRelationsOfTable<DT>(currentDatabaseIngot, lastDatabaseIngot, databaseManager, databaseType);
 		undoMigrationQuery += await this._handleManyToManyRelationsOfTable<DT>(lastDatabaseIngot, currentDatabaseIngot, databaseManager, databaseType);
 
@@ -28,6 +37,58 @@ export class ForeignKeysManager {
 
 		return [migrationQuery, undoMigrationQuery];
 	}
+
+	private static async _handleForeignKeysInTable<DT extends DatabasesTypes>(
+		currentDatabaseIngot: DatabaseIngotInterface<DT>,
+		lastDatabaseIngot: DatabaseIngotInterface<DT>,
+		databaseManager: DatabaseManagerInterface<DT>
+	): Promise<string> {
+		let queryWithHandledForeignKeys = '';
+
+		const currentTables = currentDatabaseIngot.tables;
+		const lastTables = lastDatabaseIngot.tables;
+
+		const getForeignKeysMap = (tables: TableIngotInterface<DT>[]) => {
+			return tables.reduce((acc, table) => {
+				table.foreignKeys.forEach(fk => {
+					acc[`${table.name}_${fk.key}`] = fk;
+				});
+				return acc;
+			}, {} as { [key: string]: any });
+		};
+
+		const currentForeignKeys = getForeignKeysMap(currentTables);
+		const lastForeignKeys = getForeignKeysMap(lastTables);
+
+		const addedForeignKeys = Object.keys(currentForeignKeys)
+			.filter(key => !lastForeignKeys[key])
+			.map(key => currentForeignKeys[key]);
+
+		const removedForeignKeys = Object.keys(lastForeignKeys)
+			.filter(key => !currentForeignKeys[key])
+			.map(key => lastForeignKeys[key]);
+
+		for (const foreignKey of addedForeignKeys) {
+			queryWithHandledForeignKeys += await databaseManager.tableManipulation
+				.alterTable(foreignKey.table, true)
+				.addForeignKey({
+					foreignKey: foreignKey.key,
+					referencedColumn: foreignKey.columnName,
+					referencedTable: foreignKey.table
+				}) + '\n\t\t\t\t';
+		}
+
+		for (const foreignKey of removedForeignKeys) {
+			queryWithHandledForeignKeys += await databaseManager.tableManipulation
+				.alterTable(foreignKey.table, true)
+				.dropConstraint({
+					constraintName: `fk_${foreignKey.table}_${foreignKey.columnName}`
+				}) + '\n\t\t\t\t';
+		}
+
+		return queryWithHandledForeignKeys;
+	}
+
 
 	private static _validateManyToManyRelations<DT extends DatabasesTypes>(tables: TableIngotInterface<DT>[]): void {
 		const manyToManyRelations = tables.flatMap(table => table.manyToMany);
@@ -76,6 +137,13 @@ export class ForeignKeysManager {
 		return newRelations;
 	};
 
+	// private static async ЗробитиЯєшню(яйця: яйце[]) {
+	// 	яйця = this.взятий_в_руки_яйця(яйця);
+	// 	const яйця_в_мисці = this.розбити_яйця_в_миску(яйця);
+	// 	...
+	// 	return омлет;
+	// }
+
 	private static async _handleManyToManyRelationsOfTable<DT extends DatabasesTypes>(
 		currentDatabaseIngot: DatabaseIngotInterface<DT>,
 		lastDatabaseIngot: DatabaseIngotInterface<DT>,
@@ -93,6 +161,30 @@ export class ForeignKeysManager {
 		const lastRelationsSet = new Set(lastRelations.map(relation => JSON.stringify(relation)));
 
 		const addedRelations = currentRelations.filter(relation => !lastRelationsSet.has(JSON.stringify(relation)));
+
+		const referencedColumnWithTypes: { column: string, type: string }[] = [];
+
+		currentDatabaseIngot.tables.forEach(table => {
+			addedRelations.forEach(relation => {
+				if (table.name === relation.referencedTable) {
+					if (table.primaryColumn.columnName === relation.referencedColumn) {
+						referencedColumnWithTypes.push({
+							column: table.primaryColumn.columnName,
+							type: table.primaryColumn.type
+						});
+					} else {
+						table.columns.forEach(column => {
+							if (column.name === relation.referencedColumn) {
+								referencedColumnWithTypes.push({
+									column: column.name,
+									type: String(column.options?.dataType)
+								});
+							}
+						});
+					}
+				}
+			});
+		});
 
 		const tableNamesOfRemovedRelations: string[] = Array.from(
 			new Set(lastRelations
@@ -119,8 +211,11 @@ export class ForeignKeysManager {
 			const relations = groupedRelations[futureTableName];
 			return {
 				name: futureTableName,
-				options: { primaryKeys: relations.map(relation => relation.foreignKey) },
-				columns: relations.map(relation => ({ name: relation.foreignKey, options: { dataType: 'NUMERIC' } })),
+				options: { unique: relations.map(relation => relation.foreignKey) },
+				columns: relations.map(relation => ({
+					name: relation.foreignKey,
+					options: { dataType: referencedColumnWithTypes.find(col => col.column === relation.referencedColumn)!.type }
+				})) as (ColumnPostgresInterface | ColumnMysqlInterface)[],
 				computedColumns: [],
 				foreignKeys: relations.map(relation => ({
 					key: relation.referencedColumn,

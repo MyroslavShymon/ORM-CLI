@@ -43,7 +43,7 @@ import {
 } from './columns-manager';
 import { TableManager } from './tables-manager';
 import { ForeignKeysManager } from './foreign-keys-manager';
-import { TriggerManager } from './trigger-manager';
+import { TriggerManager } from './triggers-manager';
 import { IndexManager } from './index-manger';
 
 export class MigrationManager<DT extends DatabasesTypes> implements MigrationManagerInterface {
@@ -360,6 +360,11 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 					.alterTable(table.name, true)
 					.dropTable(dropTableOptions) + '\n\t\t\t\t';
 			}
+
+			const [foreignKeysMigrationQuery, foreignKeysUndoMigrationQuery] = await ForeignKeysManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
+			migrationQuery += foreignKeysMigrationQuery;
+			undoMigrationQuery += foreignKeysUndoMigrationQuery;
+
 			return { migrationQuery, undoMigrationQuery };
 		}
 
@@ -386,20 +391,21 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			migrationQuery += await invoker.executeCommand(command);
 			undoMigrationQuery += await invoker.undoCommand();
 		};
-
+		
 		await executeOperation<AddColumnOperation<DT>, AddColumnCommand<DT>>(AddColumnOperation, AddColumnCommand);
 		await executeOperation<DeleteColumnOperation<DT>, DeleteColumnCommand<DT>>(DeleteColumnOperation, DeleteColumnCommand);
+		await executeOperation<RenameOfColumnOperation<DT>, RenameColumnCommand<DT>>(RenameOfColumnOperation, RenameColumnCommand);
+
+		const [foreignKeysMigrationQuery, foreignKeysUndoMigrationQuery] = await ForeignKeysManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
+		migrationQuery += foreignKeysMigrationQuery;
+		undoMigrationQuery += foreignKeysUndoMigrationQuery;
+
 		await executeOperation<AddDefaultValueToColumnOperation<DT>, AddDefaultValueCommand<DT>>(AddDefaultValueToColumnOperation, AddDefaultValueCommand);
 		await executeOperation<DeleteDefaultValueFromColumnOperation<DT>, DeleteDefaultValueCommand<DT>>(DeleteDefaultValueFromColumnOperation, DeleteDefaultValueCommand);
 		await executeOperation<ChangeDataTypeOfColumnOperation<DT>, ChangeDataTypeCommand<DT>>(ChangeDataTypeOfColumnOperation, ChangeDataTypeCommand);
 		await executeOperation<ChangeNotNullOfColumnOperation<DT>, ChangeNotNullCommand<DT>>(ChangeNotNullOfColumnOperation, ChangeNotNullCommand);
 		await executeOperation<ChangeUniqueValueOfColumnOperation<DT>, ChangeUniqueCommand<DT>>(ChangeUniqueValueOfColumnOperation, ChangeUniqueCommand);
 		await executeOperation<ChangeCheckConstraintOfColumnOperation<DT>, ChangeCheckConstraintCommand<DT>>(ChangeCheckConstraintOfColumnOperation, ChangeCheckConstraintCommand);
-		await executeOperation<RenameOfColumnOperation<DT>, RenameColumnCommand<DT>>(RenameOfColumnOperation, RenameColumnCommand);
-
-		const [foreignKeysMigrationQuery, foreignKeysUndoMigrationQuery] = await ForeignKeysManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
-		migrationQuery += foreignKeysMigrationQuery;
-		undoMigrationQuery += foreignKeysUndoMigrationQuery;
 
 		const [tableMigrationQuery, tableUndoMigrationQuery] = await TableManager.manage<DT>(currentDatabaseIngot, lastDatabaseIngot, this._databaseManager, this._databaseType);
 		migrationQuery += tableMigrationQuery;
