@@ -1,6 +1,6 @@
-import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { CompressedTableIngotInterface } from '../../../common';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseManagerInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export abstract class ColumnDataTypeOperationTemplate<DT extends DatabasesTypes> {
 	private readonly _databaseManager: DatabaseManagerInterface<DT>;

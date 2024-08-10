@@ -1,9 +1,9 @@
+import { DatabasesTypes } from '@myroslavshymon/orm';
 import {
 	ColumnInterface,
 	ComputedColumnInterface,
 	PrimaryGeneratedColumnInterface
-} from '@myroslavshymon/orm/orm/core';
-import { DatabasesTypes } from '@myroslavshymon/orm';
+} from '@myroslavshymon/orm/dist/orm/core';
 
 export interface CompressedTableIngotInterface<DT extends DatabasesTypes> {
 	id: string | undefined;

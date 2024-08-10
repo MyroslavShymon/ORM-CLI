@@ -1,5 +1,5 @@
 import { DatabasesTypes } from '@myroslavshymon/orm';
-import { DatabaseIngotInterface, DatabaseManagerInterface, IndexInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseIngotInterface, DatabaseManagerInterface, IndexInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class IndexManager {
 	public static async initManage<DT extends DatabasesTypes>(

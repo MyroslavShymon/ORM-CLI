@@ -1,4 +1,3 @@
-import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
@@ -9,6 +8,7 @@ import {
 	UpdateMigrationStatusInterface
 } from '../../common';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseIngotInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export interface DatabaseContextInterface<DT extends DatabasesTypes> {
 	connect(dataToConnect: ConnectionData): Promise<void>;

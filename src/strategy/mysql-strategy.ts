@@ -1,5 +1,4 @@
 import { Connection, createConnection, RowDataPacket } from 'mysql2/promise';
-import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabaseStrategy, MigrationRowInterface } from './interfaces';
 import {
 	AddMigrationInterface,
@@ -12,6 +11,7 @@ import {
 	UpdateMigrationStatusInterface
 } from '../common';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseIngotInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class MySqlStrategy implements DatabaseStrategy<DatabasesTypes.MYSQL> {
 	client!: Connection;

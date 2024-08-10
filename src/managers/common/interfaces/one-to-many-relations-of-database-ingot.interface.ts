@@ -1,4 +1,4 @@
-import { OneToManyInterface } from '@myroslavshymon/orm/orm/core';
+import { OneToManyInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export interface OneToManyRelationsOfDatabaseIngotInterface {
 	id: string | undefined;

@@ -1,5 +1,5 @@
 import { DatabasesTypes } from '@myroslavshymon/orm';
-import { DatabaseIngotInterface, DatabaseManagerInterface, TriggerInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseIngotInterface, DatabaseManagerInterface, TriggerInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class TriggerManager {
 	public static async initManage<DT extends DatabasesTypes>(

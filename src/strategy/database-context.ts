@@ -1,4 +1,3 @@
-import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
@@ -10,6 +9,7 @@ import {
 } from '../common';
 import { DatabaseContextInterface, DatabaseStrategy } from './interfaces';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseIngotInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class DatabaseContext<DT extends DatabasesTypes> implements DatabaseContextInterface<DT> {
 	private databaseStrategy: DatabaseStrategy<DT>;

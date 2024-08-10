@@ -1,5 +1,4 @@
 import { Pool, PoolClient } from 'pg';
-import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
@@ -12,6 +11,7 @@ import {
 } from '../common';
 import { DatabaseStrategy } from './interfaces';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseIngotInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class PostgreSqlStrategy implements DatabaseStrategy<DatabasesTypes.POSTGRES> {
 	client!: PoolClient;

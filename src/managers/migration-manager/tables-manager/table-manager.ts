@@ -1,5 +1,9 @@
-import { DatabaseIngotInterface, DatabaseManagerInterface, DropTableInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import {
+	DatabaseIngotInterface,
+	DatabaseManagerInterface,
+	DropTableInterface
+} from '@myroslavshymon/orm/dist/orm/core';
 
 export class TableManager {
 	public static async manage<DT extends DatabasesTypes>(

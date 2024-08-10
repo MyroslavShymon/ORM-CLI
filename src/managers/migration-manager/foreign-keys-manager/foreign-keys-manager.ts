@@ -1,17 +1,17 @@
-import {
-	ColumnMysqlInterface,
-	ColumnPostgresInterface,
-	DatabaseIngotInterface,
-	DatabaseManagerInterface,
-	ManyToManyInterface
-} from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
-import { TableIngotInterface } from '@myroslavshymon/orm/orm/core/interfaces/table-ingot.interface';
 import {
 	MatchedManyToManyRelationsInterface,
 	OneToManyRelationsOfDatabaseIngotInterface,
 	OneToOneRelationsOfDatabaseIngotInterface
 } from '../../common';
+import {
+	ColumnMysqlInterface,
+	ColumnPostgresInterface,
+	DatabaseIngotInterface,
+	DatabaseManagerInterface,
+	ManyToManyInterface,
+	TableIngotInterface
+} from '@myroslavshymon/orm/dist/orm/core';
 
 export class ForeignKeysManager {
 	public static async manage<DT extends DatabasesTypes>(

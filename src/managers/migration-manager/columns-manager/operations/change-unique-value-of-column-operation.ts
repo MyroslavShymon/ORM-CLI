@@ -1,8 +1,8 @@
 import { ColumnUniqueValueOperationTemplate } from '../templates';
 import { OperationInterface } from '../interfaces';
 import { CompressedTableIngotInterface } from '../../../common';
-import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
+import { DatabaseManagerInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class ChangeUniqueValueOfColumnOperation<DT extends DatabasesTypes> extends ColumnUniqueValueOperationTemplate<DT> implements OperationInterface {
 	private readonly _currentCompressedTables: CompressedTableIngotInterface<DT>[];

@@ -10,7 +10,7 @@ import {
 	MySqlStrategy,
 	PostgreSqlStrategy
 } from './strategy';
-import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
+import { DatabaseManagerInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class CLI<DT extends DatabasesTypes> {
 	private readonly _connectionData: ConnectionData;

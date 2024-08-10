@@ -1,4 +1,3 @@
-import { DatabaseIngotInterface } from '@myroslavshymon/orm/orm/core';
 import {
 	AddMigrationInterface,
 	CheckTableExistenceInterface,
@@ -11,6 +10,7 @@ import {
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { Connection } from 'mysql2/promise';
 import { PoolClient } from 'pg';
+import { DatabaseIngotInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export interface DatabaseStrategy<DT extends DatabasesTypes> {
 	client: DT extends DatabasesTypes.MYSQL ? Connection : DT extends DatabasesTypes.POSTGRES ? PoolClient : never;

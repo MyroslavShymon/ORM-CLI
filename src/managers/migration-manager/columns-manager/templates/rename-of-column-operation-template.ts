@@ -1,7 +1,7 @@
-import { ColumnInterface, ComputedColumnInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common';
 import { ColumnChangeInfo } from '../interfaces';
+import { ColumnInterface, ComputedColumnInterface, DatabaseManagerInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export abstract class RenameOfColumnOperationTemplate<DT extends DatabasesTypes> {
 	private readonly _databaseManager: DatabaseManagerInterface<DT>;

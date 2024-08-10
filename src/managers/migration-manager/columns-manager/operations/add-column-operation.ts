@@ -1,8 +1,8 @@
 import { ColumnOperationsTemplate } from '../templates';
 import { OperationInterface } from '../interfaces';
-import { DatabaseManagerInterface } from '@myroslavshymon/orm/orm/core';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CompressedTableIngotInterface } from '../../../common/interfaces';
+import { DatabaseManagerInterface } from '@myroslavshymon/orm/dist/orm/core';
 
 export class AddColumnOperation<DT extends DatabasesTypes> extends ColumnOperationsTemplate<DT> implements OperationInterface {
 	private readonly _currentCompressedTables: CompressedTableIngotInterface<DT>[];

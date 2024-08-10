@@ -1,13 +1,14 @@
+import { CompressedTableIngotInterface } from '../../../common/interfaces';
+import { DatabasesTypes } from '@myroslavshymon/orm';
 import {
+	BaseColumnInterface,
 	ColumnInterface,
+	ColumnOptionsInterface,
 	ComputedColumnInterface,
 	DatabaseManagerInterface,
 	DeleteColumnInterface,
 	PrimaryGeneratedColumnInterface
-} from '@myroslavshymon/orm/orm/core';
-import { CompressedTableIngotInterface } from '../../../common/interfaces';
-import { DatabasesTypes } from '@myroslavshymon/orm';
-import { BaseColumnInterface, ColumnOptionsInterface } from '@myroslavshymon/orm/orm/core/interfaces';
+} from '@myroslavshymon/orm/dist/orm/core';
 
 export abstract class ColumnOperationsTemplate<DT extends DatabasesTypes> {
 	private readonly _databaseManager: DatabaseManagerInterface<DT>;

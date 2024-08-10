@@ -12,12 +12,7 @@ import {
 import { DatabaseContextInterface } from '../../strategy';
 import { DatabasesTypes } from '@myroslavshymon/orm';
 import { CommandClass, CompressedTableIngotInterface, MigrationQueriesInterface, OperationClass } from '../common';
-import {
-	DatabaseIngotInterface,
-	DatabaseManagerInterface,
-	DropTableInterface,
-	MigrationInterface
-} from '@myroslavshymon/orm/orm/core';
+
 import {
 	AddColumnCommand,
 	AddColumnOperation,
@@ -45,6 +40,13 @@ import { TableManager } from './tables-manager';
 import { ForeignKeysManager } from './foreign-keys-manager';
 import { TriggerManager } from './triggers-manager';
 import { IndexManager } from './index-manger';
+import {
+	DatabaseIngotInterface,
+	DatabaseManagerInterface,
+	DropTableInterface,
+	MigrationInterface,
+	TableIngotInterface
+} from '@myroslavshymon/orm/dist/orm/core';
 
 export class MigrationManager<DT extends DatabasesTypes> implements MigrationManagerInterface {
 	_projectRoot = process.cwd();
@@ -368,14 +370,14 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			return { migrationQuery, undoMigrationQuery };
 		}
 
-		const currentCompressedTables: CompressedTableIngotInterface<DT>[] = currentDatabaseIngot.tables.map(table => ({
+		const currentCompressedTables: CompressedTableIngotInterface<DT>[] = currentDatabaseIngot.tables.map((table: TableIngotInterface<DT>) => ({
 			id: table?.id,
 			name: table.name,
 			columns: table.columns,
 			computedColumns: table.computedColumns
 		}));
 
-		const lastCompressedTables: CompressedTableIngotInterface<DT>[] = lastDatabaseIngot.tables.map(table => ({
+		const lastCompressedTables: CompressedTableIngotInterface<DT>[] = lastDatabaseIngot.tables.map((table: TableIngotInterface<DT>) => ({
 			id: table?.id,
 			name: table.name,
 			columns: table.columns,
@@ -391,7 +393,7 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 			migrationQuery += await invoker.executeCommand(command);
 			undoMigrationQuery += await invoker.undoCommand();
 		};
-		
+
 		await executeOperation<AddColumnOperation<DT>, AddColumnCommand<DT>>(AddColumnOperation, AddColumnCommand);
 		await executeOperation<DeleteColumnOperation<DT>, DeleteColumnCommand<DT>>(DeleteColumnOperation, DeleteColumnCommand);
 		await executeOperation<RenameOfColumnOperation<DT>, RenameColumnCommand<DT>>(RenameOfColumnOperation, RenameColumnCommand);
