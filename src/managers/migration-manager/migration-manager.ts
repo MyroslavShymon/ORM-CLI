@@ -79,8 +79,15 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		const migrationPath = path.resolve(this._projectRoot, `migrations`);
 		const migrationFiles = fs.readdirSync(migrationPath).filter(file => file.endsWith('.migration.ts'));
 
-		for (const migrationName of migrationFiles) {
-			await this._migrateDownOrUp(migrationName, direction);
+		if (direction === 'up') {
+			for (const migrationName of migrationFiles) {
+				await this._migrateDownOrUp(migrationName, direction);
+			}
+		}
+		if (direction === 'down') {
+			for (const migrationName of migrationFiles.reverse()) {
+				await this._migrateDownOrUp(migrationName, direction);
+			}
 		}
 	}
 
