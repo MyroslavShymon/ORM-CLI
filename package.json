@@ -1,6 +1,6 @@
 {
   "name": "cli-orm",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "CLI for my ORM system",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

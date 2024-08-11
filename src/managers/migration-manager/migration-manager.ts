@@ -435,7 +435,7 @@ export class MigrationManager<DT extends DatabasesTypes> implements MigrationMan
 		migrationPath = path.resolve(migrationPath, `${migrationName}.migration.ts`);
 		migrationName = convertToCamelCase(migrationName.split('_').slice(1).join(''));
 
-		const migrationContent = `import {DatabaseManagerInterface, MigrationInterface} from "@myroslavshymon/orm/orm/core";
+		const migrationContent = `import {DatabaseManagerInterface, MigrationInterface} from "@myroslavshymon/orm/dist/orm/core";
 import {DatabasesTypes} from "@myroslavshymon/orm";
 
 export class ${migrationName} implements MigrationInterface {
